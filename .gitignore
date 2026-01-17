@@ -38,7 +38,8 @@ tests/.tmp/
 .kode-apps/
 !csharp/docs/**/*.md
 !CLAUDE.md
-
+!*/**/skills/**/*.md
+!*/**/skills/**/requirements.txt
 
 # nextjs
 .next

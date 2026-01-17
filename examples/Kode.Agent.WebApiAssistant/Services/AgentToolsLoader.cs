@@ -19,9 +19,9 @@ public sealed class AgentToolsLoader
         PropertyNameCaseInsensitive = true
     };
 
-    public AgentToolsLoader(ILogger<AgentToolsLoader> logger, IServiceProvider serviceProvider)
+    public AgentToolsLoader(ILoggerFactory loggerFactory, IServiceProvider serviceProvider)
     {
-        _logger = logger;
+        _logger = loggerFactory.CreateLogger<AgentToolsLoader>();
         _serviceProvider = serviceProvider;
     }
 

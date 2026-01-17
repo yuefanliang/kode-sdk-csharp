@@ -4,65 +4,65 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![NuGet](https://img.shields.io/badge/NuGet-coming%20soon-blue)](https://www.nuget.org/)
 
-一个强大的 AI Agent 运行时 SDK，基于 .NET 10 构建，支持 Anthropic Claude 和 OpenAI GPT 模型，提供完整的工具调用、状态管理、事件流等能力。专为构建生产级 AI 应用而设计。
+A powerful AI Agent runtime SDK built on .NET 10, supporting Anthropic Claude and OpenAI GPT models, with comprehensive capabilities for tool calling, state management, event streaming, and more. Designed for building production-grade AI applications.
 
-## 🎯 项目背景
+## Project Background
 
-Kode Agent SDK for .NET 是 [Kode SDK](../README.md) 的 C# 实现，与 TypeScript 版本功能对等，提供：
+Kode Agent SDK for .NET is the C# implementation of [Kode SDK](../README.md), providing feature parity with the TypeScript version:
 
-- **事件驱动架构** - 三通道事件系统（Progress、Control、Monitor）分离关注点
-- **完整状态管理** - 支持持久化、崩溃恢复、断点续传
-- **灵活工具系统** - 内置 20+ 工具，支持自定义工具和 MCP 协议
-- **多模型支持** - Anthropic Claude、OpenAI GPT 及兼容 API
-- **企业级特性** - 权限控制、沙箱执行、依赖注入、日志集成
+- **Event-Driven Architecture** - Three-channel event system (Progress, Control, Monitor) for separation of concerns
+- **Complete State Management** - Support for persistence, crash recovery, and resumable execution
+- **Flexible Tool System** - 20+ built-in tools with support for custom tools and MCP protocol
+- **Multi-Model Support** - Anthropic Claude, OpenAI GPT, and compatible APIs
+- **Enterprise Features** - Permission control, sandbox execution, dependency injection, logging integration
 
-## 📑 目录
+## Table of Contents
 
-- [特性](#-特性)
-- [架构概览](#-架构概览)
-- [快速开始](#-快速开始)
-- [事件订阅](#-事件订阅)
-- [自定义工具](#-自定义工具)
-- [模型提供者](#-模型提供者)
-- [依赖注入](#-依赖注入)
-- [MCP 集成](#-mcp-集成)
-- [权限控制](#-权限控制)
-- [内置工具](#-内置工具)
-- [状态持久化](#-状态持久化)
-- [项目结构](#-项目结构)
-- [文档](#-文档)
-- [运行示例](#-运行示例)
-- [许可证](#-许可证)
-- [贡献](#-贡献)
-- [交流社区](#-交流社区)
-- [相关链接](#-相关链接)
+- [Features](#-features)
+- [Architecture Overview](#-architecture-overview)
+- [Quick Start](#-quick-start)
+- [Event Subscriptions](#-event-subscriptions)
+- [Custom Tools](#-custom-tools)
+- [Model Providers](#-model-providers)
+- [Dependency Injection](#-dependency-injection)
+- [MCP Integration](#-mcp-integration)
+- [Permission Control](#-permission-control)
+- [Built-in Tools](#-built-in-tools)
+- [State Persistence](#-state-persistence)
+- [Project Structure](#-project-structure)
+- [Documentation](#-documentation)
+- [Running Examples](#-running-examples)
+- [License](#-license)
+- [Contributing](#-contributing)
+- [Community](#-community)
+- [Related Links](#-related-links)
 
-## ✨ 特性
+## Features
 
-| 特性                    | 描述                                                                                    | 文档                                                        |
+| Feature                    | Description                                                                                    | Documentation                                                        |
 | ----------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| 🤖 **多模型支持**       | 支持 Anthropic Claude (Claude 4, 3.5) 和 OpenAI GPT (GPT-4o, o1) 系列模型，以及兼容 API | [模型提供者](#模型提供者)                                   |
-| 🔧 **丰富的工具系统**   | 20+ 内置工具（文件系统、Shell、Todo 管理等），支持自定义工具和 MCP 协议                 | [工具开发指南](docs/ADVANCED_GUIDE.md#工具开发指南)         |
-| 📡 **三通道事件流**     | Progress（实时输出）、Control（审批流）、Monitor（日志监控）分离架构                    | [事件系统详解](docs/ADVANCED_GUIDE.md#事件系统详解)         |
-| 💾 **状态持久化**       | JSON 文件存储和 Redis 分布式存储，支持会话恢复和断点续传                                | [状态存储](docs/ADVANCED_GUIDE.md#状态存储)                 |
-| 🔒 **权限控制**         | 细粒度的工具权限管理，支持自动审批、手动审批和拒绝策略                                  | [权限控制系统](docs/ADVANCED_GUIDE.md#权限控制系统)         |
-| 🛡️ **沙箱执行**         | 安全的命令执行环境，支持本地和 Docker 沙箱                                              | [进阶指南 - 沙箱](docs/ADVANCED_GUIDE.md)                   |
-| ⚡ **Source Generator** | 编译时工具 Schema 生成，零反射开销，类型安全                                            | [工具开发指南](docs/ADVANCED_GUIDE.md#工具开发指南)         |
-| 🔌 **MCP 集成**         | 原生支持 Model Context Protocol，轻松接入外部工具生态                                   | [MCP 协议集成](docs/ADVANCED_GUIDE.md#mcp-协议集成)         |
-| 💉 **依赖注入**         | 完整的 Microsoft.Extensions.DependencyInjection 支持                                    | [依赖注入](#依赖注入)                                       |
-| 📋 **模板系统**         | 预定义 Agent 模板，快速创建特定场景的 Agent                                             | [Sub-Agent 委派](docs/ADVANCED_GUIDE.md#sub-agent-任务委派) |
-| 🎯 **Skills 系统**      | 渐进式技能发现与激活，动态扩展 Agent 能力                                               | [Skills 系统](docs/ADVANCED_GUIDE.md#skills-系统)           |
-| 🔀 **Sub-Agent 委派**   | 支持任务委派给专门的子 Agent，实现复杂工作流编排                                        | [Sub-Agent 委派](docs/ADVANCED_GUIDE.md#sub-agent-任务委派) |
+| Multi-Model Support       | Support for Anthropic Claude (Claude 4, 3.5) and OpenAI GPT (GPT-4o, o1) series models, plus compatible APIs | [Model Providers](#model-providers)                                   |
+| Rich Tool System   | 20+ built-in tools (file system, shell, todo management, etc.), support for custom tools and MCP protocol                 | [Tool Development Guide](docs/ADVANCED_GUIDE.md#tool-development-guide)         |
+| Three-Channel Event Stream     | Progress (real-time output), Control (approval flow), Monitor (logging) separated architecture                    | [Event System Details](docs/ADVANCED_GUIDE.md#event-system-details)         |
+| State Persistence       | JSON file storage and Redis distributed storage, support for session recovery and resumable execution                                | [State Storage](docs/ADVANCED_GUIDE.md#state-storage)                 |
+| Permission Control         | Fine-grained tool permission management, support for auto-approval, manual approval, and deny policies                                  | [Permission Control System](docs/ADVANCED_GUIDE.md#permission-control-system)         |
+| Sandbox Execution         | Secure command execution environment, support for local and Docker sandboxes                                              | [Advanced Guide - Sandbox](docs/ADVANCED_GUIDE.md)                   |
+| Source Generator | Compile-time tool schema generation, zero reflection overhead, type-safe                                            | [Tool Development Guide](docs/ADVANCED_GUIDE.md#tool-development-guide)         |
+| MCP Integration         | Native Model Context Protocol support, easy integration with external tool ecosystem                                   | [MCP Protocol Integration](docs/ADVANCED_GUIDE.md#mcp-protocol-integration)         |
+| Dependency Injection         | Complete Microsoft.Extensions.DependencyInjection support                                    | [Dependency Injection](#dependency-injection)                                       |
+| Template System         | Predefined agent templates for quick creation of scenario-specific agents                                             | [Sub-Agent Delegation](docs/ADVANCED_GUIDE.md#sub-agent-delegation) |
+| Skills System      | Progressive skill discovery and activation, dynamic extension of agent capabilities                                               | [Skills System](docs/ADVANCED_GUIDE.md#skills-system)           |
+| Sub-Agent Delegation   | Support for task delegation to specialized sub-agents, enabling complex workflow orchestration                                        | [Sub-Agent Delegation](docs/ADVANCED_GUIDE.md#sub-agent-delegation) |
 
-## 🏗️ 架构概览
+## Architecture Overview
 
 ```mermaid
 graph TB
-    subgraph Application["🖥️ Application Layer"]
+    subgraph Application["Application Layer"]
         App[Your Application]
     end
 
-    subgraph Agent["🤖 Agent Core"]
+    subgraph Agent["Agent Core"]
         AgentCore[Agent]
         Config[AgentConfig]
         State[Runtime State]
@@ -70,14 +70,14 @@ graph TB
         Skills[SkillsManager]
     end
 
-    subgraph Dependencies["⚙️ Dependencies"]
+    subgraph Dependencies["Dependencies"]
         Store[(AgentStore)]
         Registry[ToolRegistry]
         Provider[ModelProvider]
         Sandbox[Sandbox]
     end
 
-    subgraph Tools["🔧 Tools"]
+    subgraph Tools["Tools"]
         Builtin[Builtin Tools]
         Custom[Custom Tools]
         MCP[MCP Tools]
@@ -85,13 +85,13 @@ graph TB
         TaskRun[task_run<br/>Sub-Agent]
     end
 
-    subgraph Providers["🌐 Model Providers"]
+    subgraph Providers["Model Providers"]
         Anthropic[Anthropic Claude]
         OpenAI[OpenAI GPT]
         Compatible[Compatible APIs]
     end
 
-    subgraph Storage["💾 Storage"]
+    subgraph Storage["Storage"]
         JSON[(JSON Store)]
         Redis[(Redis Store)]
     end
@@ -121,7 +121,7 @@ graph TB
     Store --> Redis
 ```
 
-### Agent 运行流程
+### Agent Execution Flow
 
 ```mermaid
 sequenceDiagram
@@ -131,7 +131,7 @@ sequenceDiagram
     participant Provider as Model Provider
     participant Tools as Tool Registry
 
-    User->>Agent: RunAsync("用户消息")
+    User->>Agent: RunAsync("User message")
     Agent->>EventBus: Publish(Progress, Start)
 
     loop Agent Loop
@@ -158,24 +158,24 @@ sequenceDiagram
     Agent-->>User: AgentRunResult
 ```
 
-## 📦 快速开始
+## Quick Start
 
-### 1. 安装包
+### 1. Install Packages
 
 ```bash
-# 使用 NuGet (即将发布)
+# Using NuGet (coming soon)
 dotnet add package Kode.Agent.Sdk
 dotnet add package Kode.Agent.Store.Json
 dotnet add package Kode.Agent.Tools.Builtin
 
-# 可选：MCP 支持
+# Optional: MCP support
 dotnet add package Kode.Agent.Mcp
 
-# 可选：Redis 存储
+# Optional: Redis storage
 dotnet add package Kode.Agent.Store.Redis
 ```
 
-或者直接引用项目：
+Or reference projects directly:
 
 ```xml
 <ProjectReference Include="path/to/Kode.Agent.Sdk.csproj" />
@@ -183,35 +183,35 @@ dotnet add package Kode.Agent.Store.Redis
 <ProjectReference Include="path/to/Kode.Agent.Tools.Builtin.csproj" />
 ```
 
-### 2. 配置环境变量
+### 2. Configure Environment Variables
 
-创建 `.env` 文件（推荐使用 Anthropic Claude）：
+Create a `.env` file (Anthropic Claude recommended):
 
 ```dotenv
-# Anthropic 配置（推荐）
+# Anthropic configuration (recommended)
 ANTHROPIC_API_KEY=your-api-key-here
 ANTHROPIC_MODEL_ID=claude-sonnet-4-20250514
-ANTHROPIC_BASE_URL=https://api.anthropic.com  # 可选，支持自定义端点
+ANTHROPIC_BASE_URL=https://api.anthropic.com  # Optional, supports custom endpoint
 ```
 
-可选配置其他提供者：
+Optional configuration for other providers:
 
 ```dotenv
-# OpenAI 配置 (可选)
+# OpenAI configuration (optional)
 OPENAI_API_KEY=your-api-key-here
 OPENAI_MODEL_ID=gpt-5.2
-OPENAI_BASE_URL=https://api.openai.com  # 可选，支持 Azure OpenAI
+OPENAI_BASE_URL=https://api.openai.com  # Optional, supports Azure OpenAI
 
-# 智谱 AI (可选)
+# Zhipu AI (optional)
 DEFAULT_PROVIDER=anthropic
 ANTHROPIC_API_KEY=your-api-key-here
 ANTHROPIC_MODEL_ID=GLM-4.7
 ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic
 ```
 
-> 💡 **提示**: 也可以通过代码直接配置 API 密钥，无需 `.env` 文件。
+> **Tip**: You can also configure API keys directly in code without a `.env` file.
 
-### 3. 基本使用
+### 3. Basic Usage
 
 ```csharp
 using Kode.Agent.Sdk.Core.Abstractions;
@@ -222,21 +222,21 @@ using Kode.Agent.Store.Json;
 using Kode.Agent.Tools.Builtin;
 using AgentImpl = Kode.Agent.Sdk.Core.Agent.Agent;
 
-// 1. 创建存储
+// 1. Create storage
 var store = new JsonAgentStore("./.kode");
 
-// 2. 注册工具
+// 2. Register tools
 var toolRegistry = new ToolRegistry();
 toolRegistry.RegisterBuiltinTools();
 
-// 3. 创建模型提供者（推荐使用 Anthropic Claude）
+// 3. Create model provider (Anthropic Claude recommended)
 var provider = new AnthropicProvider(new AnthropicOptions
 {
     ApiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")!,
     BaseUrl = Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL")
 });
 
-// 4. 创建依赖
+// 4. Create dependencies
 var deps = new AgentDependencies
 {
     Store = store,
@@ -245,7 +245,7 @@ var deps = new AgentDependencies
     SandboxFactory = new LocalSandboxFactory()
 };
 
-// 5. 配置 Agent
+// 5. Configure agent
 var config = new AgentConfig
 {
     Model = "claude-sonnet-4-20250514",
@@ -254,14 +254,14 @@ var config = new AgentConfig
     Tools = ["fs_read", "fs_glob", "fs_grep", "shell_exec"]
 };
 
-// 6. 创建并运行 Agent
+// 6. Create and run agent
 var agent = await AgentImpl.CreateAsync("my-agent", config, deps);
-await agent.RunAsync("帮我分析当前目录的项目结构");
+await agent.RunAsync("Help me analyze the project structure of the current directory");
 ```
 
-## 📡 事件订阅
+## Event Subscriptions
 
-Agent 提供三个事件通道用于不同场景：
+Agent provides three event channels for different scenarios:
 
 ```mermaid
 graph LR
@@ -269,16 +269,16 @@ graph LR
         EventBus[EventBus]
     end
 
-    subgraph Channels["事件通道"]
-        Progress["📊 Progress<br/>实时输出流"]
-        Control["🎮 Control<br/>审批控制"]
-        Monitor["📈 Monitor<br/>日志监控"]
+    subgraph Channels["Event Channels"]
+        Progress["Progress<br/>Real-time Output Stream"]
+        Control["Control<br/>Approval Control"]
+        Monitor["Monitor<br/>Logging Monitor"]
     end
 
-    subgraph Handlers["处理器"]
-        UI["UI 渲染"]
-        Approval["审批处理"]
-        Logger["日志记录"]
+    subgraph Handlers["Handlers"]
+        UI["UI Rendering"]
+        Approval["Approval Handling"]
+        Logger["Logging"]
     end
 
     EventBus --> Progress --> UI
@@ -291,13 +291,13 @@ graph LR
 ```
 
 ```csharp
-// Progress 通道 - 实时输出流
+// Progress channel - Real-time output stream
 await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Progress))
 {
     switch (envelope.Event)
     {
         case TextChunkEvent textChunk:
-            Console.Write(textChunk.Delta);  // 流式输出文本
+            Console.Write(textChunk.Delta);  // Stream text output
             break;
 
         case ToolStartEvent toolStart:
@@ -314,17 +314,17 @@ await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Progre
     }
 }
 
-// Control 通道 - 需要人工干预的事件
+// Control channel - Events requiring human intervention
 await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Control))
 {
     if (envelope.Event is PermissionRequiredEvent approval)
     {
-        // 处理需要审批的操作（示例：全部允许）
+        // Handle operations requiring approval (example: allow all)
         await agent.ApproveToolCallAsync(approval.Call.Id);
     }
 }
 
-// Monitor 通道 - 日志和调试信息
+// Monitor channel - Logging and debugging information
 await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Monitor))
 {
     if (envelope.Event is ErrorEvent err)
@@ -334,9 +334,9 @@ await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Monito
 }
 ```
 
-## 自定义工具
+## Custom Tools
 
-### 方式一：使用 Source Generator（推荐）
+### Method 1: Using Source Generator (Recommended)
 
 ```csharp
 using Kode.Agent.Sdk.Tools;
@@ -355,14 +355,14 @@ public partial class WeatherTool : ITool
 
     public async Task<ToolResult> ExecuteAsync(ToolContext context)
     {
-        // 实现获取天气的逻辑
+        // Implement weather fetching logic
         var weather = await FetchWeather(Location, Unit);
         return ToolResult.Success(weather);
     }
 }
 ```
 
-### 方式二：手动注册
+### Method 2: Manual Registration
 
 ```csharp
 toolRegistry.Register(new ToolDefinition
@@ -386,7 +386,7 @@ toolRegistry.Register(new ToolDefinition
 });
 ```
 
-## 模型提供者
+## Model Providers
 
 ### Anthropic Claude
 
@@ -394,13 +394,13 @@ toolRegistry.Register(new ToolDefinition
 var provider = new AnthropicProvider(new AnthropicOptions
 {
     ApiKey = "your-api-key",
-    BaseUrl = "https://api.anthropic.com",  // 或自定义端点
+    BaseUrl = "https://api.anthropic.com",  // Or custom endpoint
     ModelId = "claude-sonnet-4-20250514",
     EnableBetaFeatures = false
 });
 ```
 
-支持的模型：
+Supported models:
 
 - `claude-sonnet-4-20250514`
 - `claude-3-5-sonnet-20241022`
@@ -413,13 +413,13 @@ var provider = new AnthropicProvider(new AnthropicOptions
 var provider = new OpenAIProvider(new OpenAIOptions
 {
     ApiKey = "your-api-key",
-    BaseUrl = "https://api.openai.com",  // 或 Azure OpenAI 端点
-    Organization = "your-org-id",  // 可选
+    BaseUrl = "https://api.openai.com",  // Or Azure OpenAI endpoint
+    Organization = "your-org-id",  // Optional
     DefaultModel = "gpt-4o"
 });
 ```
 
-支持的模型：
+Supported models:
 
 - `gpt-4o`
 - `gpt-4o-mini`
@@ -427,12 +427,12 @@ var provider = new OpenAIProvider(new OpenAIOptions
 - `o1-preview`
 - `o1-mini`
 
-### 使用 OpenAI 兼容端点
+### Using OpenAI Compatible Endpoints
 
-许多第三方服务提供 OpenAI 兼容 API：
+Many third-party services provide OpenAI-compatible APIs:
 
 ```csharp
-// 智谱 AI (BigModel)
+// Zhipu AI (BigModel)
 var provider = new AnthropicProvider(new AnthropicOptions
 {
     ApiKey = "your-key",
@@ -448,30 +448,30 @@ var provider = new OpenAIProvider(new OpenAIOptions
 });
 ```
 
-## 依赖注入
+## Dependency Injection
 
-使用 Microsoft.Extensions.DependencyInjection：
+Using Microsoft.Extensions.DependencyInjection:
 
 ```csharp
 using Kode.Agent.Sdk.Extensions;
 
 var services = new ServiceCollection();
 
-// 注册 Agent SDK
+// Register Agent SDK
 services.AddKodeAgent(options =>
 {
     options.DefaultModel = "claude-sonnet-4-20250514";
     options.StoreDirectory = "./.kode";
 });
 
-// 注册 Anthropic 提供者（推荐）
+// Register Anthropic provider (recommended)
 services.AddAnthropicProvider(options =>
 {
     options.ApiKey = Configuration["Anthropic:ApiKey"]!;
     options.BaseUrl = Configuration["Anthropic:BaseUrl"];
 });
 
-// 或注册 OpenAI 提供者（可选）
+// Or register OpenAI provider (optional)
 // services.AddOpenAIProvider(options =>
 // {
 //     options.ApiKey = Configuration["OpenAI:ApiKey"]!;
@@ -479,19 +479,19 @@ services.AddAnthropicProvider(options =>
 
 var serviceProvider = services.BuildServiceProvider();
 
-// 使用
+// Use
 var agentFactory = serviceProvider.GetRequiredService<IAgentFactory>();
 var agent = await agentFactory.CreateAsync("my-agent", config);
 ```
 
-## 🔌 MCP 集成
+## MCP Integration
 
-SDK 原生支持 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)，可轻松接入外部工具生态：
+SDK has native support for [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), making it easy to integrate external tool ecosystems:
 
 ```csharp
 using Kode.Agent.Mcp;
 
-// 配置 MCP 服务器
+// Configure MCP servers
 var mcpConfig = new McpConfig
 {
     Servers = new Dictionary<string, McpServerConfig>
@@ -510,13 +510,13 @@ var mcpConfig = new McpConfig
     }
 };
 
-// 注册 MCP 工具
+// Register MCP tools
 services.AddMcpTools(mcpConfig);
 ```
 
-## 🔐 权限控制
+## Permission Control
 
-SDK 提供灵活的权限控制机制：
+SDK provides a flexible permission control mechanism:
 
 ```csharp
 var config = new AgentConfig
@@ -526,207 +526,207 @@ var config = new AgentConfig
     Permissions = new PermissionConfig
     {
         Mode = "auto",                       // auto | approval | readonly | custom
-        RequireApprovalTools = ["bash_run"], // 强制需要审批的工具
-        DenyTools = ["fs_rm"]                // 禁止使用的工具
+        RequireApprovalTools = ["bash_run"], // Tools requiring approval
+        DenyTools = ["fs_rm"]                // Forbidden tools
     }
 };
 ```
 
-权限模式：
+Permission modes:
 
-- `auto` - 默认允许（可配合 `RequireApprovalTools/DenyTools/AllowTools` 细化）
-- `approval` - 所有工具都需要手动审批（返回 `permission_required`）
-- `readonly` - 基于 `ToolDescriptor.metadata` 判断是否“会产生副作用”，会变更的工具直接 deny，其余 allow/ask（对齐 TS permission-modes）
-- 自定义 mode - 需要在宿主进程注册对应的 permission mode handler
+- `auto` - Default allow (can be refined with `RequireApprovalTools/DenyTools/AllowTools`)
+- `approval` - All tools require manual approval (returns `permission_required`)
+- `readonly` - Based on `ToolDescriptor.metadata` to determine if it "has side effects", tools that mutate state are directly denied, others allow/ask (aligned with TS permission-modes)
+- Custom mode - Requires registering corresponding permission mode handler in host process
 
-## 内置工具
+## Built-in Tools
 
-SDK 提供了丰富的内置工具集：
+SDK provides a rich set of built-in tools:
 
-### 文件系统工具
+### File System Tools
 
-| 工具名          | 描述                       | 权限   |
+| Tool Name          | Description                       | Permission   |
 | --------------- | -------------------------- | ------ |
-| `fs_read`       | 读取文件内容，支持行号范围 | 只读   |
-| `fs_write`      | 写入文件内容               | 需审批 |
-| `fs_edit`       | 编辑文件（搜索替换）       | 需审批 |
-| `fs_multi_edit` | 批量编辑多个文件           | 需审批 |
-| `fs_glob`       | 文件模式搜索               | 只读   |
-| `fs_grep`       | 文件内容搜索（正则）       | 只读   |
-| `fs_list`       | 列出目录内容               | 只读   |
-| `fs_rm`         | 删除文件或目录             | 需审批 |
+| `fs_read`       | Read file content, supports line ranges | Read-only   |
+| `fs_write`      | Write file content               | Requires approval |
+| `fs_edit`       | Edit file (search and replace)       | Requires approval |
+| `fs_multi_edit` | Batch edit multiple files           | Requires approval |
+| `fs_glob`       | File pattern search               | Read-only   |
+| `fs_grep`       | File content search (regex)       | Read-only   |
+| `fs_list`       | List directory contents               | Read-only   |
+| `fs_rm`         | Delete file or directory             | Requires approval |
 
-### Shell 工具
+### Shell Tools
 
-| 工具名      | 描述             | 权限   |
+| Tool Name      | Description             | Permission   |
 | ----------- | ---------------- | ------ |
-| `bash_run`  | 执行 Shell 命令  | 需审批 |
-| `bash_logs` | 查看命令执行日志 | 只读   |
-| `bash_kill` | 终止后台进程     | 需审批 |
+| `bash_run`  | Execute Shell commands  | Requires approval |
+| `bash_logs` | View command execution logs | Read-only   |
+| `bash_kill` | Terminate background process     | Requires approval |
 
-### 任务管理工具
+### Task Management Tools
 
-| 工具名       | 描述           | 权限   |
+| Tool Name       | Description           | Permission   |
 | ------------ | -------------- | ------ |
-| `todo_read`  | 读取 Todo 列表 | 只读   |
-| `todo_write` | 更新 Todo 列表 | 需审批 |
-| `task_run`   | 运行预定义任务 | 需审批 |
+| `todo_read`  | Read Todo list | Read-only   |
+| `todo_write` | Update Todo list | Requires approval |
+| `task_run`   | Run predefined tasks | Requires approval |
 
-### 技能工具
+### Skills Tools
 
-| 工具名           | 描述         | 权限   |
+| Tool Name           | Description         | Permission   |
 | ---------------- | ------------ | ------ |
-| `skill_list`     | 列出可用技能 | 只读   |
-| `skill_activate` | 激活技能     | 需审批 |
-| `skill_resource` | 获取技能资源 | 只读   |
+| `skill_list`     | List available skills | Read-only   |
+| `skill_activate` | Activate skill     | Requires approval |
+| `skill_resource` | Get skill resources | Read-only   |
 
-## 状态持久化
+## State Persistence
 
 ```csharp
-// 运行中会持续持久化到 Store（messages/tool-calls/todos/meta/events）
-await agent.RunAsync("开始任务");
+// Continuously persists to Store during execution (messages/tool-calls/todos/meta/events)
+await agent.RunAsync("Start task");
 
-// 保存一个“安全分叉点”快照（TS-aligned: agent.snapshot）
+// Save a "safe fork point" snapshot (TS-aligned: agent.snapshot)
 var snapshotId = await agent.SnapshotAsync();
 
-// 从 Store 恢复（TS-aligned: resumeFromStore）
+// Resume from Store (TS-aligned: resumeFromStore)
 var restoredAgent = await Agent.ResumeFromStoreAsync("agent-id", deps);
-await restoredAgent.RunAsync("继续我们之前的讨论");
+await restoredAgent.RunAsync("Continue our previous discussion");
 ```
 
-## 📁 项目结构
+## Project Structure
 
 ```
 csharp/
 ├── src/
-│   ├── Kode.Agent.Sdk/              # 核心 SDK
-│   │   ├── Core/                    # 核心抽象和类型
-│   │   │   ├── Abstractions/        # IAgent, IEventBus, ITool 等接口
-│   │   │   ├── Agent/               # Agent 实现
-│   │   │   ├── Events/              # 事件系统
-│   │   │   ├── Types/               # AgentConfig, Message 等类型
-│   │   │   └── Todo/                # Todo 管理
-│   │   ├── Infrastructure/          # 基础设施
-│   │   │   ├── Providers/           # Anthropic/OpenAI 提供者
-│   │   │   └── Sandbox/             # 沙箱执行
-│   │   ├── Tools/                   # 工具系统（ToolRegistry, ToolBase）
-│   │   └── Extensions/              # DI 扩展
-│   ├── Kode.Agent.SourceGenerator/  # 编译时代码生成器
-│   ├── Kode.Agent.Mcp/              # MCP 协议支持
-│   ├── Kode.Agent.Store.Json/       # JSON 文件存储
-│   ├── Kode.Agent.Store.Redis/      # Redis 分布式存储
-│   └── Kode.Agent.Tools.Builtin/    # 内置工具实现
+│   ├── Kode.Agent.Sdk/              # Core SDK
+│   │   ├── Core/                    # Core abstractions and types
+│   │   │   ├── Abstractions/        # IAgent, IEventBus, ITool etc.
+│   │   │   ├── Agent/               # Agent implementation
+│   │   │   ├── Events/              # Event system
+│   │   │   ├── Types/               # AgentConfig, Message etc.
+│   │   │   └── Todo/                # Todo management
+│   │   ├── Infrastructure/          # Infrastructure
+│   │   │   ├── Providers/           # Anthropic/OpenAI providers
+│   │   │   └── Sandbox/             # Sandbox execution
+│   │   ├── Tools/                   # Tool system (ToolRegistry, ToolBase)
+│   │   └── Extensions/              # DI extensions
+│   ├── Kode.Agent.SourceGenerator/  # Compile-time code generator
+│   ├── Kode.Agent.Mcp/              # MCP protocol support
+│   ├── Kode.Agent.Store.Json/       # JSON file storage
+│   ├── Kode.Agent.Store.Redis/      # Redis distributed storage
+│   └── Kode.Agent.Tools.Builtin/    # Built-in tool implementations
 ├── examples/
-│   ├── Kode.Agent.Examples/         # 使用示例（Console）
-│   └── Kode.Agent.WebApiAssistant/  # 使用示例（ASP.NET WebAPI，OpenAI SSE 兼容）
+│   ├── Kode.Agent.Examples/         # Usage examples (Console)
+│   └── Kode.Agent.WebApiAssistant/  # Usage examples (ASP.NET WebAPI, OpenAI SSE compatible)
 ├── tests/
-│   └── Kode.Agent.Tests/            # 单元和集成测试
-└── docs/                            # 详细文档
-    ├── ADVANCED_GUIDE.md            # 进阶指南
-    └── API_REFERENCE.md             # API 参考
+│   └── Kode.Agent.Tests/            # Unit and integration tests
+└── docs/                            # Detailed documentation
+    ├── ADVANCED_GUIDE.md            # Advanced guide
+    └── API_REFERENCE.md             # API reference
 ```
 
-## ⚙️ 要求
+## Requirements
 
-- .NET 10.0 或更高版本
-- 有效的 Anthropic 或 OpenAI API 密钥
+- .NET 10.0 or higher
+- Valid Anthropic or OpenAI API key
 
-## 📚 文档
+## Documentation
 
-### 核心文档
+### Core Documentation
 
-| 文档                                           | 描述                                                                                                                  |
+| Document                                           | Description                                                                                                                  |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **[进阶指南](docs/ADVANCED_GUIDE.md)**         | 深入讲解架构设计、事件系统、工具开发、Skills 系统、Sub-Agent 委派、MCP 集成、权限控制、状态管理等高级主题             |
-| **[API 参考](docs/API_REFERENCE.md)**          | 完整的 API 文档，包含核心类型（AgentConfig、AgentDependencies）、Agent 生命周期、事件模型、MCP 集成类型、Store 接口等 |
-| **[与 TypeScript 对齐](docs/TS_ALIGNMENT.md)** | C# SDK 与 TypeScript 实现的对齐状态、差异分析和持续对齐计划                                                           |
+| **[Advanced Guide](docs/ADVANCED_GUIDE.md)**         | Deep dive into architecture design, event system, tool development, Skills system, Sub-Agent delegation, MCP integration, permission control, state management, and other advanced topics             |
+| **[API Reference](docs/API_REFERENCE.md)**          | Complete API documentation, including core types (AgentConfig, AgentDependencies), Agent lifecycle, event models, MCP integration types, Store interfaces, etc. |
+| **[TypeScript Alignment](docs/TS_ALIGNMENT.md)** | C# SDK and TypeScript implementation alignment status, difference analysis, and continuous alignment plan                                                           |
 
-### 快速导航
+### Quick Navigation
 
-#### 🏗️ 架构设计
+#### Architecture
 
-- [整体架构概览](docs/ADVANCED_GUIDE.md#架构概览) - SDK 组件、依赖关系、核心组件说明
-- [事件系统详解](docs/ADVANCED_GUIDE.md#事件系统详解) - 三通道架构、事件类型、订阅模式
-- [Agent 生命周期](docs/ADVANCED_GUIDE.md#agent-生命周期) - 状态转换、断点状态、创建与恢复
+- [Overall Architecture Overview](docs/ADVANCED_GUIDE.md#architecture-overview) - SDK components, dependencies, core component descriptions
+- [Event System Details](docs/ADVANCED_GUIDE.md#event-system-details) - Three-channel architecture, event types, subscription patterns
+- [Agent Lifecycle](docs/ADVANCED_GUIDE.md#agent-lifecycle) - State transitions, breakpoint states, creation and recovery
 
-#### 🔧 工具开发
+#### Tool Development
 
-- [工具开发指南](docs/ADVANCED_GUIDE.md#工具开发指南) - 工具接口、Source Generator、注册方式
-- [MCP 协议集成](docs/ADVANCED_GUIDE.md#mcp-协议集成) - MCP 配置、常用服务器、工具过滤
-- [内置工具列表](#内置工具) - 文件系统、Shell、任务管理、技能工具
+- [Tool Development Guide](docs/ADVANCED_GUIDE.md#tool-development-guide) - Tool interfaces, Source Generator, registration methods
+- [MCP Protocol Integration](docs/ADVANCED_GUIDE.md#mcp-protocol-integration) - MCP configuration, common servers, tool filtering
+- [Built-in Tools List](#built-in-tools) - File system, Shell, task management, skills tools
 
-#### 🎯 高级功能
+#### Advanced Features
 
-- [Skills 系统](docs/ADVANCED_GUIDE.md#skills-系统) - 渐进式技能发现与激活
-- [Sub-Agent 委派](docs/ADVANCED_GUIDE.md#sub-agent-任务委派) - 任务分解与模板管理
-- [权限控制系统](docs/ADVANCED_GUIDE.md#权限控制系统) - 权限模式、配置示例、审批流程
-- [状态存储](docs/ADVANCED_GUIDE.md#状态存储) - JSON/Redis 存储、断点续传
+- [Skills System](docs/ADVANCED_GUIDE.md#skills-system) - Progressive skill discovery and activation
+- [Sub-Agent Delegation](docs/ADVANCED_GUIDE.md#sub-agent-delegation) - Task decomposition and template management
+- [Permission Control System](docs/ADVANCED_GUIDE.md#permission-control-system) - Permission modes, configuration examples, approval process
+- [State Storage](docs/ADVANCED_GUIDE.md#state-storage) - JSON/Redis storage, resumable execution
 
-#### 📖 最佳实践
+#### Best Practices
 
-- [错误处理](docs/ADVANCED_GUIDE.md#错误处理) - 异常类型、处理模式
-- [最佳实践](docs/ADVANCED_GUIDE.md#最佳实践) - Serilog 日志、超时设置、资源管理、会话管理
+- [Error Handling](docs/ADVANCED_GUIDE.md#error-handling) - Exception types, handling patterns
+- [Best Practices](docs/ADVANCED_GUIDE.md#best-practices) - Serilog logging, timeout settings, resource management, session management
 
-## 🚀 运行示例
+## Running Examples
 
-### Console 示例
+### Console Examples
 
 ```bash
 cd examples/Kode.Agent.Examples
 
-# 复制环境变量模板
+# Copy environment variable template
 cp .env.example .env
-# 编辑 .env 填入 API 密钥
+# Edit .env with your API keys
 
-# 运行示例
+# Run examples
 dotnet run
 ```
 
-可用示例：
+Available examples:
 
-- **GettingStarted** - 基础用法，快速入门
-- **AgentInbox** - 事件流和工具执行监控
-- **ApprovalControl** - 人工审批流程控制
-- **RoomCollab** - 多 Agent 协作场景
-- **CustomToolsExample** - 自定义工具开发
-- **HooksUsage** - 生命周期钩子使用
-- **TemplateUsage** - Agent 模板系统
-- **SchedulerUsage** - 定时任务调度
-- **EventBusUsage** - 事件总线详解
+- **GettingStarted** - Basic usage, quick start
+- **AgentInbox** - Event flow and tool execution monitoring
+- **ApprovalControl** - Manual approval flow control
+- **RoomCollab** - Multi-agent collaboration scenarios
+- **CustomToolsExample** - Custom tool development
+- **HooksUsage** - Lifecycle hooks usage
+- **TemplateUsage** - Agent template system
+- **SchedulerUsage** - Scheduled task management
+- **EventBusUsage** - Event bus details
 
-### WebAPI 示例（OpenAI 兼容）
+### WebAPI Example (OpenAI Compatible)
 
-这是一个 ASP.NET WebAPI 应用，对外暴露 **OpenAI Chat Completions 兼容接口**，支持 SSE 流式输出。
+This is an ASP.NET WebAPI application that exposes an **OpenAI Chat Completions compatible interface** with SSE streaming support.
 
-**🎁 推荐优惠**：智谱 GLM Coding 超值订阅，支持 Claude Code、Cline 等 20+ 大编程工具！
+**Special Offer**: Zhipu GLM Coding value subscription, supporting Claude Code, Cline, and 20+ major programming tools!
 
-![智谱 GLM Coding](assets/zhipu.png)
+![Zhipu GLM Coding](assets/zhipu.png)
 
-[立即开拼，享限时惊喜价！](https://www.bigmodel.cn/glm-coding?ic=HFFPJWPZQN)
+[Join now for limited-time special pricing!](https://www.bigmodel.cn/glm-coding?ic=HFFPJWPZQN)
 
-#### 快速启动
+#### Quick Start
 
 ```bash
 cd examples/Kode.Agent.WebApiAssistant
 
 cp .env.example .env
-# 编辑 .env 填入 API 密钥
+# Edit .env with your API keys
 
 dotnet run
 ```
 
-默认监听地址以控制台输出为准（通常是 `http://localhost:5123`）。
+Default listening address is shown in console output (usually `http://localhost:5123`).
 
-#### 使用 OpenAI 客户端
+#### Using OpenAI Client
 
-由于接口完全兼容 OpenAI，您可以使用任何支持 OpenAI API 的客户端：
+Since the interface is fully OpenAI compatible, you can use any client that supports the OpenAI API:
 
-**配置地址**：`http://localhost:5123/v1/chat/completions`
+**Configuration URL**: `http://localhost:5123/v1/chat/completions`
 
-**示例 - 使用 curl**：
+**Example - Using curl**:
 
 ```bash
-# 非流式请求
+# Non-streaming request
 curl http://localhost:5123/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -734,12 +734,12 @@ curl http://localhost:5123/v1/chat/completions \
     "user": "my-session",
     "messages": [
       {"role": "system", "content": "You are a helpful assistant."},
-      {"role": "user", "content": "你好，介绍一下你自己"}
+      {"role": "user", "content": "Hello, introduce yourself"}
     ],
     "stream": false
   }'
 
-# 流式请求（SSE）
+# Streaming request (SSE)
 curl http://localhost:5123/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
@@ -747,13 +747,13 @@ curl http://localhost:5123/v1/chat/completions \
     "model": "claude-sonnet-4-20250514",
     "user": "my-session",
     "messages": [
-      {"role": "user", "content": "用 3 句话总结一下今天的计划"}
+      {"role": "user", "content": "Summarize today's plan in 3 sentences"}
     ],
     "stream": true
   }'
 ```
 
-**支持的客户端**：
+**Supported Clients**:
 - [OpenAI Python SDK](https://github.com/openai/openai-python)
 - [OpenAI Node.js SDK](https://github.com/openai/openai-node)
 - [LangChain](https://js.langchain.com/)
@@ -761,23 +761,23 @@ curl http://localhost:5123/v1/chat/completions \
 - [Cursor](https://cursor.sh/)
 - [Continue](https://continue.dev/)
 - [Cline](https://cline.so/)
-- 任何其他支持自定义 OpenAI 端点的工具
+- Any other tool that supports custom OpenAI endpoints
 
-**Python 示例**：
+**Python Example**:
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:5123/v1",
-    api_key="anything"  # 不需要真实密钥
+    api_key="anything"  # No real key needed
 )
 
 response = client.chat.completions.create(
     model="claude-sonnet-4-20250514",
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "帮我分析这个项目"}
+        {"role": "user", "content": "Help me analyze this project"}
     ],
     stream=True
 )
@@ -787,21 +787,21 @@ for chunk in response:
         print(chunk.choices[0].delta.content, end="")
 ```
 
-**Node.js 示例**：
+**Node.js Example**:
 
 ```javascript
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
   baseURL: 'http://localhost:5123/v1',
-  apiKey: 'anything'  // 不需要真实密钥
+  apiKey: 'anything'  // No real key needed
 });
 
 const stream = await openai.chat.completions.create({
   model: 'claude-sonnet-4-20250514',
   messages: [
     { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', content: '帮我分析这个项目' }
+    { role: 'user', content: 'Help me analyze this project' }
   ],
   stream: true
 });
@@ -811,45 +811,45 @@ for await (const chunk of stream) {
 }
 ```
 
-#### 主要特性
+#### Key Features
 
-| 特性 | 说明 |
+| Feature | Description |
 |------|------|
-| **OpenAI 兼容** | 完全兼容 OpenAI Chat Completions API |
-| **SSE 流式输出** | 支持 `text/event-stream` 流式响应 |
-| **会话持久化** | 自动保存对话状态，支持多轮对话 |
-| **工具调用** | 支持文件系统、Shell、Email、通知等工具 |
-| **权限控制** | 细粒度的工具权限管理 |
-| **MCP 集成** | 支持 Model Context Protocol 外部工具 |
+| **OpenAI Compatible** | Fully compatible with OpenAI Chat Completions API |
+| **SSE Streaming** | Supports `text/event-stream` streaming responses |
+| **Session Persistence** | Automatically saves conversation state, supports multi-turn conversations |
+| **Tool Calling** | Supports file system, shell, email, notification, and other tools |
+| **Permission Control** | Fine-grained tool permission management |
+| **MCP Integration** | Supports Model Context Protocol external tools |
 
-更详细的接口说明见 `examples/Kode.Agent.WebApiAssistant/README.md`。
+For more detailed interface documentation, see `examples/Kode.Agent.WebApiAssistant/README.md`.
 
-## 📄 许可证
+## License
 
 MIT License
 
-## 🤝 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request！请查阅 [贡献指南](CONTRIBUTING.md) 了解更多信息。
+Issues and Pull Requests are welcome! Please check the [Contributing Guide](CONTRIBUTING.md) for more information.
 
-## 💬 交流社区
+## Community
 
-加入我们的微信交流群，一起讨论技术问题和最佳实践：
+Join our WeChat group to discuss technical questions and best practices:
 
-![微信交流群](assets/wechat-group.JPG)
+![WeChat Group](assets/wechat-group.JPG)
 
-## 🔗 相关链接
+## Related Links
 
-| 链接                                  | 描述                            |
+| Link                                  | Description                            |
 | ------------------------------------- | ------------------------------- |
-| [Kode SDK (TypeScript)](../README.md) | TypeScript 版本的 SDK，功能对等 |
-| [示例项目](examples/)                 | Console 和 WebAPI 示例          |
-| [源代码](src/)                        | 核心 SDK 实现代码               |
-| [测试代码](tests/)                    | 单元和集成测试                  |
-| [变更日志](CHANGELOG.md)              | 版本更新记录                    |
+| [Kode SDK (TypeScript)](../README.md) | TypeScript version of the SDK with feature parity |
+| [Example Projects](examples/)                 | Console and WebAPI examples          |
+| [Source Code](src/)                        | Core SDK implementation code               |
+| [Test Code](tests/)                    | Unit and integration tests                  |
+| [Changelog](CHANGELOG.md)              | Version update records                    |
 
-### 生态系统
+### Ecosystem
 
-- **[内置工具](src/Kode.Agent.Tools.Builtin/)** - 文件系统、Shell、Todo 等工具实现
-- **[MCP 集成](src/Kode.Agent.Mcp/)** - Model Context Protocol 支持
-- **[存储后端](src/Kode.Agent.Store.Json/)** - JSON 和 Redis 存储
+- **[Built-in Tools](src/Kode.Agent.Tools.Builtin/)** - File system, shell, todo, and other tool implementations
+- **[MCP Integration](src/Kode.Agent.Mcp/)** - Model Context Protocol support
+- **[Storage Backends](src/Kode.Agent.Store.Json/)** - JSON and Redis storage

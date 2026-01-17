@@ -97,7 +97,6 @@ public sealed record AssistantOptions
         var allowToolsRaw = GetFirst(configuration, "Kode:AllowTools", "KODE_ALLOW_TOOLS",
             "*," +
             "fs_read,fs_write,fs_edit,fs_grep,fs_glob,fs_multi_edit," +
-            "calendar_list,calendar_create,calendar_update," +
             "email_list,email_read,email_draft,email_move," +
             "notify_send,time_now," +
             "web_search,web_reader,web_search_prime,read_url," +
@@ -107,7 +106,7 @@ public sealed record AssistantOptions
 
         // 解析需要审批的工具
         var requireApprovalToolsRaw = GetFirst(configuration, "Kode:RequireApprovalTools", "KODE_REQUIRE_APPROVAL_TOOLS",
-            "email_send,email_delete,calendar_delete,fs_rm");
+            "email_send,email_delete,fs_rm");
         var requireApprovalTools = ParseList(requireApprovalToolsRaw);
 
         // 解析禁止的工具
@@ -132,7 +131,7 @@ public sealed record AssistantOptions
             : Path.GetFullPath(Path.Combine(workDir, skillsDirRaw));
 
         // 获取信任的技能列表
-        var trustedSkillsRaw = GetFirst(configuration, "Kode:TrustedSkills", "KODE_TRUSTED_SKILLS", "memory,knowledge,email,calendar");
+        var trustedSkillsRaw = GetFirst(configuration, "Kode:TrustedSkills", "KODE_TRUSTED_SKILLS", "memory,knowledge,email");
         var trustedSkills = ParseList(trustedSkillsRaw);
 
         return new SkillsConfig

@@ -21,7 +21,7 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
     .Enrich.FromLogContext()
     .WriteTo.Console(
-        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}{NewLine}{Message:lj}{NewLine}{Exception}")
+        outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
     .WriteTo.File(
         "logs/kode-.log",
         rollingInterval: RollingInterval.Day,
@@ -77,6 +77,12 @@ builder.Services.AddSingleton<AssistantService>();
 builder.Services.AddMcpClientManager();
 builder.Services.AddSingleton<McpServersLoader>();
 
+// // 添加任务调度器
+// builder.Services.AddHostedService<Kode.Agent.WebApiAssistant.Scheduler.TaskScheduler>();
+
+// 添加调度器演示服务（会自动注册示例任务）
+// builder.Services.AddSingleton<Kode.Agent.WebApiAssistant.Scheduler.SchedulerDemoService>();
+
 // 添加核心服务（包括 UserService 和 SessionService）
 builder.Services.AddCoreServices();
 
@@ -86,19 +92,10 @@ builder.Services.AddHttpClient("Notify", client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-// 添加平台特定工具服务（calendar, email, notify, time）
+// 添加平台特定工具服务（email, notify, time）
 builder.Services.AddPlatformTools(builder.Configuration);
 
 var app = builder.Build();
-
-// 加载 MCP 服务器（启动时加载 MCP 工具）
-var mcpLoader = app.Services.GetRequiredService<McpServersLoader>();
-var toolRegistry = app.Services.GetRequiredService<IToolRegistry>();
-var mcpToolCount = await mcpLoader.LoadAndRegisterServersAsync(
-    builder.Configuration,
-    toolRegistry,
-    CancellationToken.None);
-Log.Information("[MCP] Loaded {Count} tools from MCP servers", mcpToolCount);
 
 // 启用 Swagger
 // app.UseSwagger();

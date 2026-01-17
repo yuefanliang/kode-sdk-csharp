@@ -80,7 +80,7 @@ public sealed class McpServersLoader : IAsyncDisposable
                 // Store config for later reference
                 _serverConfigs.TryAdd(serverName, mcpConfig);
 
-                // Load tools from this server
+                // Load tools from this server (McpToolProvider logs the tool count)
                 var tools = await McpToolProvider.GetToolsAsync(_mcpManager, mcpConfig, _logger, cancellationToken);
 
                 // Register each tool and collect names
@@ -89,8 +89,6 @@ public sealed class McpServersLoader : IAsyncDisposable
                     toolRegistry.Register(tool);
                     mcpToolNames.Add(tool.Name);
                 }
-
-                _logger.LogInformation("Loaded {Count} tools from MCP server: {ServerName}", tools.Count, serverName);
             }
             catch (Exception ex)
             {

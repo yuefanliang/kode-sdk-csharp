@@ -1,35 +1,35 @@
 # Kode Agent SDK (C#) API Reference
 
-本文件以 `csharp/src/` 的当前实现为准，概述常用 API、关键类型与事件模型；如有出入，以源码为准。
+This document outlines common APIs, key types, and event models. Please refer to the source code for the most accurate information.
 
 ## Core Types
 
 ### `AgentConfig`
 
-- 位置：`csharp/src/Kode.Agent.Sdk/Core/Types/AgentConfig.cs`
-- 用途：创建/恢复 Agent 的运行时配置（大部分字段与 TS `src/core/agent.ts` 对应）。
+- Location: `src/Kode.Agent.Sdk/Core/Types/AgentConfig.cs`
+- Purpose: Runtime configuration for creating/resuming Agents
 
-关键字段：
+Key fields:
 
-- `Model`：`string`（可为空字符串；通常由 Template 合并提供）
-- `SystemPrompt`：`string?`
-- `TemplateId`：`string?`（启用 template merge）
-- `Tools`：`IReadOnlyList<string>?`（`"*"` 表示允许全部 registry 工具）
-- `Permissions`：`PermissionConfig?`
-- `SandboxOptions`：`SandboxOptions?`
-- `Context` / `Skills` / `SubAgents` / `Todo`：对齐 TS runtime 配置
-- `MaxToolConcurrency` / `ToolTimeout`：对齐 TS `maxToolConcurrency` / `toolTimeoutMs`
+- `Model`: `string` (can be empty string; typically provided by Template merge)
+- `SystemPrompt`: `string?`
+- `TemplateId`: `string?` (enables template merge)
+- `Tools`: `IReadOnlyList<string>?` (`"*"` means allow all registry tools)
+- `Permissions`: `PermissionConfig?`
+- `SandboxOptions`: `SandboxOptions?`
+- `Context` / `Skills` / `SubAgents` / `Todo`: Runtime configuration fields
+- `MaxToolConcurrency` / `ToolTimeout`: Tool concurrency and timeout settings
 
 ### `AgentConfigOverrides`
 
-- 位置：`csharp/src/Kode.Agent.Sdk/Core/Types/AgentConfig.cs`
-- 用途：配合 “resume-from-meta” 从 Store 恢复时覆盖部分字段（对齐 TS `resumeFromStore(..., { overrides })`）。
-- 语义：`null` 表示保留存储的值。
+- Location: `src/Kode.Agent.Sdk/Core/Types/AgentConfig.cs`
+- Purpose: Override specific fields when resuming from Store with "resume-from-meta"
+- Semantics: `null` means keep the stored value.
 
 ### `AgentDependencies`
 
-- 位置：`csharp/src/Kode.Agent.Sdk/Core/Types/AgentDependencies.cs`
-- 关键依赖：
+- Location: `src/Kode.Agent.Sdk/Core/Types/AgentDependencies.cs`
+- Key dependencies:
   - `IAgentStore Store`
   - `ISandboxFactory SandboxFactory`
   - `IToolRegistry ToolRegistry`
@@ -46,171 +46,171 @@ await Agent.CreateAsync(agentId, config, deps, cancellationToken);
 
 ### Resume (two flavors)
 
-- **From explicit config**（旧方式，仍保留）：
+- **From explicit config** (legacy method, still supported):
 
 ```csharp
 await Agent.ResumeFromStoreAsync(agentId, config, deps, options, cancellationToken);
 ```
 
-- **From meta.json**（TS 对齐方式，推荐）：
+- **From meta.json** (recommended method):
 
 ```csharp
 await Agent.ResumeFromStoreAsync(agentId, deps, options, overrides, cancellationToken);
 ```
 
-该方式会读取 `Store.loadInfo/loadMessages/loadToolCallRecords`，并用 `meta.json` 的 `Metadata` 字段重建 `AgentConfig`（支持 overrides）。
+This method reads `Store.loadInfo/loadMessages/loadToolCallRecords` and rebuilds `AgentConfig` using the `Metadata` field from `meta.json` (supports overrides).
 
 ## Running
 
 ### `IAgent`
 
-- 位置：`csharp/src/Kode.Agent.Sdk/Core/Abstractions/IAgent.cs`
-- 常用方法：
-  - `RunAsync(input)`：阻塞运行直到本轮完成或暂停
-  - `StepAsync()`：执行一个 step（model + tool 处理）
+- Location: `src/Kode.Agent.Sdk/Core/Abstractions/IAgent.cs`
+- Common methods:
+  - `RunAsync(input)`: Run until current round completes or pauses
+  - `StepAsync()`: Execute one step (model + tool processing)
   - `PauseAsync()` / `ResumeAsync()`
   - `ApproveToolCallAsync()` / `DenyToolCallAsync()`
-  - `SnapshotAsync(label?)`：对齐 TS `agent.snapshot(label?)`（保存安全分叉点 Snapshot）
-  - `ForkAsync(newAgentId, ..., snapshotId?)`：对齐 TS `agent.fork(...)`（从 Snapshot 分叉新 Agent）
+  - `SnapshotAsync(label?)`: Save safe fork point Snapshot
+  - `ForkAsync(newAgentId, ..., snapshotId?)`: Fork new Agent from Snapshot
 
-### TS-aligned convenience methods (`Agent` concrete type)
+### Convenience methods (`Agent` concrete type)
 
-- 位置：`csharp/src/Kode.Agent.Sdk/Core/Agent/Agent.cs`
-- `Send(text, options)`：仅入队（user/reminder），user 会触发 processing loop
-- `Schedule()`：获取 `Scheduler`（可注册 every-steps 触发器；会发 monitor `scheduler_triggered`）
-- `On(eventType, handler)`：按 `event.type` 订阅 control/monitor（`permission_*` 走 control，其余走 monitor），返回 `IDisposable` 用于取消订阅
-- `Subscribe(channels?, opts?)`：TS 风格订阅（默认不回放历史；提供 `since/kinds`）
-- `SubscribeProgress(opts?)`：仅订阅 progress（默认不回放历史；提供 `since/kinds`）
-- `Kick()`：强制进入 processing loop（暂停时不触发）
-- `InterruptAsync(note?)`：best-effort 中断当前 processing/tool 执行，并补齐 dangling `tool_use` 的 synthetic `tool_result`
-- `ChatStream(input, opts?)` / `ChatStreamAsync(input, opts?)`：对齐 TS `agent.chatStream(input, { since?, kinds? })`，发送并返回 progress 流，直到收到 `done`
-- `ChatAsync(input, opts?)` / `CompleteAsync(input, opts?)`：对齐 TS `agent.chat/complete`，返回 `CompleteResult { status, text, last, permissionIds }`
-- `Stream(input, opts?)`：对齐 TS `agent.stream(...)`（`chatStream` 别名）
-- `SendAsync(text, options?)`：对齐 TS `agent.send(...)`，返回 messageId
-- `StatusAsync()`：返回 `AgentStatus`（state/stepCount/lastBookmark/cursor/breakpoint）
-- `InfoAsync()`：返回 `AgentInfo`（templateId/createdAt/lineage/metadata 等）
+- Location: `src/Kode.Agent.Sdk/Core/Agent/Agent.cs`
+- `Send(text, options)`: Only enqueue (user/reminder), user triggers processing loop
+- `Schedule()`: Get `Scheduler` (can register every-steps triggers; sends monitor `scheduler_triggered`)
+- `On(eventType, handler)`: Subscribe to control/monitor by `event.type` (`permission_*` goes to control, others to monitor), returns `IDisposable` for unsubscribe
+- `Subscribe(channels?, opts?)`: Style subscription (no history replay by default; provides `since/kinds`)
+- `SubscribeProgress(opts?)`: Subscribe to progress only (no history replay by default; provides `since/kinds`)
+- `Kick()`: Force entry into processing loop (doesn't trigger when paused)
+- `InterruptAsync(note?)`: Best-effort interrupt current processing/tool execution, and supply synthetic `tool_result` for dangling `tool_use`
+- `ChatStream(input, opts?)` / `ChatStreamAsync(input, opts?)`: Send and return progress stream until `done` is received
+- `ChatAsync(input, opts?)` / `CompleteAsync(input, opts?)`: Return `CompleteResult { status, text, last, permissionIds }`
+- `Stream(input, opts?)`: `chatStream` alias
+- `SendAsync(text, options?)`: Return messageId
+- `StatusAsync()`: Return `AgentStatus` (state/stepCount/lastBookmark/cursor/breakpoint)
+- `InfoAsync()`: Return `AgentInfo` (templateId/createdAt/lineage/metadata etc.)
 
 ## Events
 
 ### `IEventBus` + Bookmarks
 
-- 位置：`csharp/src/Kode.Agent.Sdk/Core/Abstractions/IEventBus.cs`
-- 关键能力：
+- Location: `src/Kode.Agent.Sdk/Core/Abstractions/IEventBus.cs`
+- Key capabilities:
   - `GetLastBookmark()`
   - `GetCursor()`
-  - `GetFailedEventCount()` / `FlushFailedEventsAsync()`：对齐 TS `getFailedEventCount()/flushFailedEvents()`（关键事件持久化失败后的内存缓冲与重试）
+  - `GetFailedEventCount()` / `FlushFailedEventsAsync()`: In-memory buffer and retry for critical event persistence failures
   - `SubscribeAsync(EventChannel channels, Bookmark? since = null, ...)`
-  - `SubscribeAsync(..., kinds: IReadOnlyCollection<string>?)`：按 `event.type` 过滤（TS `subscribe({ kinds })`）
+  - `SubscribeAsync(..., kinds: IReadOnlyCollection<string>?)`: Filter by `event.type`
   - `SubscribeProgressAsync(Bookmark? since = null, ...)`
-  - `SubscribeProgressAsync(..., kinds: IReadOnlyCollection<string>?)`：按 `event.type` 过滤
-  - TS 对齐：EventEnvelope 形状为 `{ cursor, bookmark, event }`，其中 `event.channel` 为 `progress|control|monitor`
-  - TS 对齐：除 envelope.bookmark 外，`AgentEvent` 本体也会包含 `bookmark` 字段
-  - TS 对齐：当 `since` 为 `null` 时，不回放历史，只推送新事件；需要回放请显式传入 `since`
-  - TS 对齐：当遇到未知 `event.type` 时，会反序列化为 `UnknownEvent`（不会直接丢弃事件）
+  - `SubscribeProgressAsync(..., kinds: IReadOnlyCollection<string>?)`: Filter by `event.type`
+  - EventEnvelope shape is `{ cursor, bookmark, event }`, where `event.channel` is `progress|control|monitor`
+  - Besides envelope.bookmark, `AgentEvent` body also contains `bookmark` field
+  - When `since` is `null`, don't replay history, only push new events; for replay, explicitly pass `since`
+  - When encountering unknown `event.type`, deserialize as `UnknownEvent` (won't discard events directly)
 
 ### Progress / Control / Monitor events
 
-事件分三通道：`progress`（流式输出）、`control`（审批）、`monitor`（可观测性）。
+Events are separated into three channels: `progress` (streaming output), `control` (approval), `monitor` (observability).
 
-其中与 OpenAI SSE 映射强相关的是 `progress`：
+The `progress` channel is strongly related to OpenAI SSE mapping:
 
 - `TextChunkStartEvent` / `TextChunkEvent` / `TextChunkEndEvent`
 - `ThinkChunkStartEvent` / `ThinkChunkEvent` / `ThinkChunkEndEvent`
 - `ToolStartEvent` / `ToolEndEvent` / `ToolErrorEvent`
-- `DoneEvent`：本轮结束标记
+- `DoneEvent`: Round completion marker
 
-`DoneEvent`（对齐 TS）：
+`DoneEvent`:
 
-- `Step`：对齐 TS `done.step`
-- `Reason`：对齐 TS `done.reason`（`completed|interrupted`）
+- `Step`: Step number
+- `Reason`: Completion reason (`completed|interrupted`)
 
-枚举序列化（TS 对齐）：
+Enum serialization:
 
-- `AgentRuntimeState` / `BreakpointState` / `ToolCallState` 在 JSON 中使用 TS 的大写枚举值（例如 `READY`、`PRE_MODEL`、`APPROVAL_REQUIRED`），并兼容读取旧的数字值。
+- `AgentRuntimeState` / `BreakpointState` / `ToolCallState` use uppercase enum values in JSON (e.g., `READY`, `PRE_MODEL`, `APPROVAL_REQUIRED`), and support reading old numeric values.
 
-常用 `monitor` 事件（部分）：
+Common `monitor` events (partial):
 
-- `StepCompleteEvent`：`step_complete`
-- `SchedulerTriggeredEvent`：`scheduler_triggered`
-- `AgentRecoveredEvent`：`agent_recovered`
-- `TokenUsageEvent`：`token_usage`（`TotalTokens = InputTokens + OutputTokens`）
-- `ContextRepairEvent`：`context_repair`（修复 orphan `tool_result`）
-- `StorageFailureEvent`：`storage_failure`（关键事件持久化失败时的降级告警；可能仅通过 `OnMonitor` 回调可见）
+- `StepCompleteEvent`: `step_complete`
+- `SchedulerTriggeredEvent`: `scheduler_triggered`
+- `AgentRecoveredEvent`: `agent_recovered`
+- `TokenUsageEvent`: `token_usage` (`TotalTokens = InputTokens + OutputTokens`)
+- `ContextRepairEvent`: `context_repair` (fix orphan `tool_result`)
+- `StorageFailureEvent`: `storage_failure` (degradation warning when critical event persistence fails; may only be visible through `OnMonitor` callback)
 
 ## MCP Integration Types
 
 ### `McpConfig`
 
-- 位置：`csharp/src/Kode.Agent.Mcp/McpConfig.cs`
-- 用途：MCP 服务器连接配置
+- Location: `src/Kode.Agent.Mcp/McpConfig.cs`
+- Purpose: MCP server connection configuration
 
 ```csharp
 public sealed class McpConfig
 {
     public required McpTransportType Transport { get; init; }
-    public string? Command { get; init; }                    // stdio 传输的命令
-    public IReadOnlyList<string>? Args { get; init; }        // stdio 传输的参数
-    public IReadOnlyDictionary<string, string>? Environment { get; init; }  // stdio 环境变量
-    public string? Url { get; init; }                        // HTTP/SSE 传输的 URL
-    public IReadOnlyDictionary<string, string>? Headers { get; init; }      // HTTP 请求头
-    public string? ServerName { get; init; }                 // 服务器名称（用于命名空间）
-    public IReadOnlyList<string>? Include { get; init; }     // 工具白名单
-    public IReadOnlyList<string>? Exclude { get; init; }     // 工具黑名单
+    public string? Command { get; init; }                    // Command for stdio transport
+    public IReadOnlyList<string>? Args { get; init; }        // Arguments for stdio transport
+    public IReadOnlyDictionary<string, string>? Environment { get; init; }  // stdio environment variables
+    public string? Url { get; init; }                        // URL for HTTP/SSE transport
+    public IReadOnlyDictionary<string, string>? Headers { get; init; }      // HTTP request headers
+    public string? ServerName { get; init; }                 // Server name (for namespacing)
+    public IReadOnlyList<string>? Include { get; init; }     // Tool whitelist
+    public IReadOnlyList<string>? Exclude { get; init; }     // Tool blacklist
 }
 ```
 
 ### `McpTransportType`
 
-- 位置：`csharp/src/Kode.Agent.Mcp/McpConfig.cs`
-- 用途：MCP 传输类型枚举
+- Location: `src/Kode.Agent.Mcp/McpConfig.cs`
+- Purpose: MCP transport type enumeration
 
 ```csharp
 public enum McpTransportType
 {
-    Stdio,           // 标准 I/O（子进程）
-    Http,            // HTTP 传输（基于 SSE）
-    StreamableHttp,  // 可流式 HTTP 传输（双向流）
-    Sse              // Server-Sent Events 传输
+    Stdio,           // Standard I/O (subprocess)
+    Http,            // HTTP transport (SSE-based)
+    StreamableHttp,  // Streamable HTTP transport (bidirectional stream)
+    Sse              // Server-Sent Events transport
 }
 ```
 
 ### `McpClientManager`
 
-- 位置：`csharp/src/Kode.Agent.Mcp/McpClientManager.cs`
-- 用途：管理多个 MCP 服务器的客户端连接
+- Location: `src/Kode.Agent.Mcp/McpClientManager.cs`
+- Purpose: Manage client connections for multiple MCP servers
 
 ```csharp
 public sealed class McpClientManager : IAsyncDisposable
 {
-    // 连接到 MCP 服务器
+    // Connect to MCP server
     public Task<McpClient> ConnectAsync(
         string serverName,
         McpConfig config,
         CancellationToken cancellationToken = default);
 
-    // 断开指定服务器连接
+    // Disconnect specified server connection
     public Task DisconnectAsync(string serverName);
 
-    // 断开所有服务器连接
+    // Disconnect all server connections
     public Task DisconnectAllAsync();
 
-    // 获取已连接的客户端
+    // Get connected client
     public McpClient? GetClient(string serverName);
 
-    // 获取所有已连接的服务器名称
+    // Get all connected server names
     public IReadOnlyList<string> ConnectedServers { get; }
 }
 ```
 
 ### `McpToolProvider`
 
-- 位置：`csharp/src/Kode.Agent.Mcp/McpToolProvider.cs`
-- 用途：从 MCP 服务器获取工具并转换为 ITool 对象
+- Location: `src/Kode.Agent.Mcp/McpToolProvider.cs`
+- Purpose: Get tools from MCP servers and convert to ITool objects
 
 ```csharp
 public static class McpToolProvider
 {
-    // 从 MCP 服务器获取工具并转换为 ITool 对象
+    // Get tools from MCP servers and convert to ITool objects
     public static Task<IReadOnlyList<ITool>> GetToolsAsync(
         McpClientManager manager,
         McpConfig config,
@@ -219,34 +219,34 @@ public static class McpToolProvider
 }
 ```
 
-**MCP 工具命名规则**：工具名称使用命名空间格式 `mcp__{serverName}__{toolName}`，例如：
+**MCP tool naming convention**: Tool names use namespaced format `mcp__{serverName}__{toolName}`, for example:
 - `mcp__chrome-devtools__take_screenshot`
 - `mcp__filesystem__read_file`
 - `mcp__github__create_issue`
 
 ### `McpServersLoader`
 
-- 位置：`examples/Kode.Agent.WebApiAssistant/Services/McpServersLoader.cs`
-- 用途：从 appsettings.json 配置加载 MCP 服务器
+- Location: `examples/Kode.Agent.WebApiAssistant/Services/McpServersLoader.cs`
+- Purpose: Load MCP servers from appsettings.json configuration
 
 ```csharp
 public sealed class McpServersLoader : IAsyncDisposable
 {
-    // 从配置加载 MCP 服务器并注册工具
+    // Load MCP servers from configuration and register tools
     public async Task<IReadOnlyList<string>> LoadAndRegisterServersAsync(
         IConfiguration configuration,
         IToolRegistry toolRegistry,
         CancellationToken cancellationToken = default);
 
-    // 断开所有 MCP 服务器连接
+    // Disconnect all MCP server connections
     public Task DisconnectAllAsync();
 
-    // 获取已加载的服务器列表
+    // Get list of loaded servers
     public IReadOnlyList<string> LoadedServers { get; }
 }
 ```
 
-**appsettings.json 配置格式：**
+**appsettings.json configuration format:**
 ```json
 {
   "McpServers": {
@@ -264,7 +264,7 @@ public sealed class McpServersLoader : IAsyncDisposable
 
 ## Store
 
-- 位置：`csharp/src/Kode.Agent.Sdk/Core/Abstractions/IAgentStore.cs`
-- TS 对齐：除 runtime（messages/tool-calls/todos）外，已包含 meta/events/snapshots/history windows/compression/recovered files 等能力。
-- `tool-calls.json`（TS 对齐）：`ToolCallRecord` 使用 TS 结构（`id/name/input/state/approval/auditTrail/createdAt/updatedAt...`），并支持从旧结构（`callId/toolName/arguments/state(int)`）自动迁移读取。
-- `snapshots/`（TS 对齐）：`SaveSnapshotAsync/LoadSnapshotAsync/ListSnapshotsAsync` 使用 TS `Snapshot` 结构（`id/messages/lastSfpIndex/lastBookmark/createdAt/metadata`）。
+- Location: `src/Kode.Agent.Sdk/Core/Abstractions/IAgentStore.cs`
+- Storage capabilities include: runtime (messages/tool-calls/todos), meta/events/snapshots/history windows/compression/recovered files, etc.
+- `tool-calls.json`: `ToolCallRecord` uses standard structure (`id/name/input/state/approval/auditTrail/createdAt/updatedAt...`), and supports automatic migration reading from old structure (`callId/toolName/arguments/state(int)`).
+- `snapshots/`: `SaveSnapshotAsync/LoadSnapshotAsync/ListSnapshotsAsync` uses `Snapshot` structure (`id/messages/lastSfpIndex/lastBookmark/createdAt/metadata`).

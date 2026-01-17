@@ -1,104 +1,103 @@
-# Kode Agent SDK 进阶指南
+# Kode Agent SDK Advanced Guide
 
-本文档提供更深入的 SDK 使用说明和最佳实践。
+This document provides in-depth SDK usage instructions and best practices.
 
-## 目录
+## Table of Contents
 
-1. [架构概览](#架构概览)
-2. [Agent 生命周期](#agent-生命周期)
-3. [事件系统详解](#事件系统详解)
-4. [工具开发指南](#工具开发指南)
-5. [Skills 系统](#skills-系统)
-6. [Sub-Agent 任务委派](#sub-agent-任务委派)
-7. [模型提供者深入](#模型提供者深入)
-8. [MCP 协议集成](#mcp-协议集成)
-9. [权限控制系统](#权限控制系统)
-10. [状态存储](#状态存储)
-11. [错误处理](#错误处理)
-12. [最佳实践](#最佳实践)
-13. [与 TypeScript `src/` 对齐](#与-typescript-src-对齐)
+1. [Architecture Overview](#architecture-overview)
+2. [Agent Lifecycle](#agent-lifecycle)
+3. [Event System Details](#event-system-details)
+4. [Tool Development Guide](#tool-development-guide)
+5. [Skills System](#skills-system)
+6. [Sub-Agent Task Delegation](#sub-agent-task-delegation)
+7. [Model Providers Deep Dive](#model-providers-deep-dive)
+8. [MCP Protocol Integration](#mcp-protocol-integration)
+9. [Permission Control System](#permission-control-system)
+10. [State Storage](#state-storage)
+11. [Error Handling](#error-handling)
+12. [Best Practices](#best-practices)
 
 ---
 
-## 架构概览
+## Architecture Overview
 
-### SDK 整体架构
+### SDK Overall Architecture
 
 ```mermaid
 graph TB
-    subgraph UserApp["🖥️ 用户应用层"]
-        App[应用程序]
-        DI[依赖注入容器]
+    subgraph UserApp["Application Layer"]
+        App[Application]
+        DI[DI Container]
     end
-    
-    subgraph Core["🎯 Agent 核心"]
-        Agent[Agent 状态机]
-        Config[AgentConfig 配置]
-        State[RuntimeState 状态]
-        EventBus[EventBus 事件总线]
-        Loop[Agent Loop 循环]
+
+    subgraph Core["Agent Core"]
+        Agent[Agent State Machine]
+        Config[AgentConfig Config]
+        State[RuntimeState State]
+        EventBus[EventBus Event Bus]
+        Loop[Agent Loop]
     end
-    
-    subgraph Infra["🔌 基础设施层"]
-        subgraph Providers["模型提供者"]
+
+    subgraph Infra["Infrastructure Layer"]
+        subgraph Providers["Model Providers"]
             Anthropic[AnthropicProvider]
             OpenAI[OpenAIProvider]
         end
-        
-        subgraph Stores["状态存储"]
+
+        subgraph Stores["State Storage"]
             JsonStore[JsonAgentStore]
             RedisStore[RedisAgentStore]
         end
-        
-        subgraph Sandboxes["沙箱环境"]
+
+        subgraph Sandboxes["Sandbox Environments"]
             LocalSandbox[LocalSandbox]
             DockerSandbox[DockerSandbox]
         end
     end
-    
-    subgraph ToolSystem["🔧 工具系统"]
+
+    subgraph ToolSystem["Tool System"]
         Registry[ToolRegistry]
-        
-        subgraph BuiltinTools["内置工具"]
-            FS[文件系统工具]
-            Shell[Shell 工具]
-            Todo[Todo 工具]
+
+        subgraph BuiltinTools["Built-in Tools"]
+            FS[File System Tools]
+            Shell[Shell Tools]
+            Todo[Todo Tools]
         end
-        
-        subgraph External["外部工具"]
-            Custom[自定义工具]
-            MCP[MCP 工具]
+
+        subgraph External["External Tools"]
+            Custom[Custom Tools]
+            MCP[MCP Tools]
         end
     end
-    
-    subgraph Events["📡 事件通道"]
-        Progress[Progress 进度]
-        Control[Control 控制]
-        Monitor[Monitor 监控]
+
+    subgraph Events["Event Channels"]
+        Progress[Progress Channel]
+        Control[Control Channel]
+        Monitor[Monitor Channel]
     end
-    
+
     App --> DI
     DI --> Agent
-    
+
     Agent --> Config
     Agent --> State
     Agent --> EventBus
     Agent --> Loop
-    
+
     Loop --> Providers
     Loop --> Registry
     Loop --> Stores
-    
+
     Registry --> BuiltinTools
     Registry --> External
-    
+
     FS --> Sandboxes
     Shell --> Sandboxes
-    
+
     EventBus --> Progress
     EventBus --> Control
     EventBus --> Monitor
-    
+
     style Core fill:#e1f5fe
     style ToolSystem fill:#f3e5f5
     style Events fill:#fff3e0
@@ -106,17 +105,7 @@ graph TB
 
 ---
 
-## 与 TypeScript `src/` 对齐
-
-仓库内的 TypeScript 实现位于 `src/`（用于 Node/TS 侧运行时与 SDK），C# SDK 会以其行为语义为基准持续对齐，重点包括：
-
-- sandbox 的工作目录与路径边界（`workDir/enforceBoundary/allowPaths`）
-- 工具权限 allowlist/deny/require-approval
-- WebAPI 场景下的 dataDir 目录约定与初始化
-
-当前对齐状态、主要差异点与分阶段对齐计划见：`csharp/docs/TS_ALIGNMENT.md`。
-
-### 组件依赖关系
+### Component Dependencies
 
 ```mermaid
 graph LR
@@ -126,15 +115,15 @@ graph LR
         Tools[Tools]
         Extensions[Extensions]
     end
-    
-    subgraph Packages["可选包"]
+
+    subgraph Packages["Optional Packages"]
         StoreJson[Store.Json]
         StoreRedis[Store.Redis]
         ToolsBuiltin[Tools.Builtin]
         McpPkg[Mcp]
         SourceGen[SourceGenerator]
     end
-    
+
     StoreJson --> Core
     StoreRedis --> Core
     ToolsBuiltin --> Core
@@ -142,103 +131,103 @@ graph LR
     McpPkg --> Core
     McpPkg --> Tools
     SourceGen -.-> Tools
-    
+
     style SDK fill:#bbdefb
     style Packages fill:#c8e6c9
 ```
 
-### 核心组件
+### Core Components
 
-| 组件 | 职责 |
+| Component | Responsibility |
 |------|------|
-| **Agent** | 对话状态机，协调消息处理和工具调用 |
-| **EventBus** | 事件发布订阅中心，支持三通道 |
-| **AgentStore** | 状态持久化接口（JSON/Redis） |
-| **ToolRegistry** | 工具注册和发现 |
-| **ModelProvider** | LLM 模型抽象层（Anthropic/OpenAI） |
-| **Sandbox** | 安全的命令执行环境 |
-| **McpToolProvider** | MCP 协议工具提供者 |
+| **Agent** | Conversation state machine, coordinates message processing and tool calls |
+| **EventBus** | Event pub/sub center, supports three channels |
+| **AgentStore** | State persistence interface (JSON/Redis) |
+| **ToolRegistry** | Tool registration and discovery |
+| **ModelProvider** | LLM model abstraction layer (Anthropic/OpenAI) |
+| **Sandbox** | Secure command execution environment |
+| **McpToolProvider** | MCP protocol tool provider |
 
 ---
 
-## Agent 生命周期
+## Agent Lifecycle
 
-### 状态转换图
+### State Transition Diagram
 
 ```mermaid
 stateDiagram-v2
     [*] --> Ready: CreateAsync()
-    
+
     Ready --> Working: RunAsync(input)
-    Working --> Working: 处理中
-    Working --> Paused: 需要审批
-    Working --> Ready: 完成
-    Working --> Failed: 错误
-    
+    Working --> Working: Processing
+    Working --> Paused: Approval Required
+    Working --> Ready: Completed
+    Working --> Failed: Error
+
     Paused --> Working: ApproveToolCallAsync()
     Paused --> Working: DenyToolCallAsync()
     Paused --> Ready: PauseAsync()
-    
+
     Ready --> [*]: DisposeAsync()
     Failed --> [*]: DisposeAsync()
-    
+
     note right of Working
-        Agent 正在处理消息
-        或执行工具调用
+        Agent is processing messages
+        or executing tool calls
     end note
-    
+
     note right of Paused
-        等待用户审批
-        或手动输入
+        Waiting for user approval
+        or manual input
     end note
 ```
 
-### 断点状态（用于崩溃恢复）
+### Breakpoint States (for Crash Recovery)
 
 ```mermaid
 stateDiagram-v2
     direction LR
-    
+
     [*] --> Ready
-    Ready --> PreModel: 开始调用模型
-    PreModel --> StreamingModel: 接收响应流
-    StreamingModel --> ToolPending: 检测到工具调用
-    StreamingModel --> Ready: 无工具调用，完成
-    
-    ToolPending --> AwaitingApproval: 需要审批
-    ToolPending --> PreTool: 自动审批
-    AwaitingApproval --> PreTool: 用户批准
-    AwaitingApproval --> Ready: 用户拒绝
-    
-    PreTool --> ToolExecuting: 开始执行
-    ToolExecuting --> PostTool: 执行完成
-    PostTool --> PreModel: 继续循环
-    PostTool --> Ready: 达到终止条件
+    Ready --> PreModel: Start model call
+    PreModel --> StreamingModel: Receiving response stream
+    StreamingModel --> ToolPending: Tool call detected
+    StreamingModel --> Ready: No tool call, complete
+
+    ToolPending --> AwaitingApproval: Approval needed
+    ToolPending --> PreTool: Auto-approved
+    AwaitingApproval --> PreTool: User approved
+    AwaitingApproval --> Ready: User denied
+
+    PreTool --> ToolExecuting: Start execution
+    ToolExecuting --> PostTool: Execution complete
+    PostTool --> PreModel: Continue loop
+    PostTool --> Ready: Termination condition met
 ```
 
-Agent 支持以下运行时状态：
+Agent supports the following runtime states:
 
-| 状态 | 描述 |
+| State | Description |
 |------|------|
-| `Ready` | Agent 已创建，准备接收输入 |
-| `Working` | Agent 正在处理消息或执行工具 |
-| `Paused` | Agent 暂停，等待审批或用户输入 |
+| `Ready` | Agent created, ready to receive input |
+| `Working` | Agent is processing messages or executing tools |
+| `Paused` | Agent paused, waiting for approval or user input |
 
-| 断点状态 | 描述 |
+| Breakpoint State | Description |
 |----------|------|
-| `Ready` | 初始状态 |
-| `PreModel` | 即将调用模型 |
-| `StreamingModel` | 正在接收模型响应 |
-| `ToolPending` | 工具调用等待执行 |
-| `AwaitingApproval` | 等待用户审批 |
-| `PreTool` | 即将执行工具 |
-| `ToolExecuting` | 工具正在执行 |
-| `PostTool` | 工具执行完成 |
+| `Ready` | Initial state |
+| `PreModel` | About to call model |
+| `StreamingModel` | Receiving model response |
+| `ToolPending` | Tool call pending execution |
+| `AwaitingApproval` | Waiting for user approval |
+| `PreTool` | About to execute tool |
+| `ToolExecuting` | Tool executing |
+| `PostTool` | Tool execution complete |
 
-### 创建 Agent
+### Creating an Agent
 
 ```csharp
-// 方式一：新建 Agent
+// Method 1: Create new Agent
 var agent = await Agent.CreateAsync(
     agentId: "unique-id",
     config: new AgentConfig
@@ -251,7 +240,7 @@ var agent = await Agent.CreateAsync(
     dependencies: deps
 );
 
-// 方式二：恢复现有 Agent（TS 对齐：从 meta.json 重建 config）
+// Method 2: Resume existing Agent (rebuild config from meta.json)
 Agent agent2;
 try
 {
@@ -263,27 +252,27 @@ catch
 }
 ```
 
-### 运行循环
+### Execution Loop
 
 ```csharp
-// 简单运行
-await agent.RunAsync("你好，请帮我分析这个文件");
+// Simple execution
+await agent.RunAsync("Hello, please help me analyze this file");
 
-// 带取消支持
+// With cancellation support
 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-await agent.RunAsync("执行复杂任务", cts.Token);
+await agent.RunAsync("Execute complex task", cts.Token);
 
-// 持续对话
-await agent.RunAsync("第一个问题");
-await agent.RunAsync("跟进问题");
-await agent.RunAsync("继续讨论");
+// Continuous conversation
+await agent.RunAsync("First question");
+await agent.RunAsync("Follow-up question");
+await agent.RunAsync("Continue discussion");
 ```
 
 ---
 
-## 事件系统详解
+## Event System Details
 
-### 三通道架构
+### Three-Channel Architecture
 
 ```mermaid
 graph TB
@@ -291,93 +280,93 @@ graph TB
         Core[Agent Core]
         EventBus[EventBus]
     end
-    
-    subgraph Channels["事件通道"]
-        subgraph Progress["📊 Progress 通道"]
-            TextChunk[TextChunk*<br/>文本流]
-            ToolStart[tool:start<br/>工具开始]
-            ToolEnd[tool:end<br/>工具结束]
-            ToolError[tool:error<br/>工具失败]
-            Done[done<br/>步完成]
+
+    subgraph Channels["Event Channels"]
+        subgraph Progress["Progress Channel"]
+            TextChunk[TextChunk*<br/>Text stream]
+            ToolStart[tool:start<br/>Tool start]
+            ToolEnd[tool:end<br/>Tool end]
+            ToolError[tool:error<br/>Tool error]
+            Done[done<br/>Step complete]
         end
-        
-        subgraph Control["🎮 Control 通道"]
-            Approval[permission_required<br/>权限请求]
-            ApprovalDecided[permission_decided<br/>权限决定]
+
+        subgraph Control["Control Channel"]
+            Approval[permission_required<br/>Permission request]
+            ApprovalDecided[permission_decided<br/>Permission decision]
         end
-        
-        subgraph Monitor["📈 Monitor 通道"]
-            State[state_changed<br/>状态]
-            Breakpoint[breakpoint_changed<br/>断点]
-            Error[error<br/>错误遥测]
-            Token[token_usage<br/>Token 统计]
+
+        subgraph Monitor["Monitor Channel"]
+            State[state_changed<br/>State]
+            Breakpoint[breakpoint_changed<br/>Breakpoint]
+            Error[error<br/>Error telemetry]
+            Token[token_usage<br/>Token stats]
         end
     end
-    
-    subgraph Subscribers["订阅者"]
-        UI[UI 渲染器]
-        Approval_Handler[审批处理器]
-        Logger[日志系统]
+
+    subgraph Subscribers["Subscribers"]
+        UI[UI Renderer]
+        Approval_Handler[Approval Handler]
+        Logger[Logging System]
     end
-    
+
     Core --> EventBus
     EventBus --> Progress
     EventBus --> Control
     EventBus --> Monitor
-    
+
     Progress --> UI
     Control --> Approval_Handler
     Monitor --> Logger
-    
+
     style Progress fill:#e8f5e9
     style Control fill:#fff3e0
     style Monitor fill:#e3f2fd
 ```
 
-### 事件流时序图
+### Event Flow Sequence Diagram
 
 ```mermaid
 sequenceDiagram
-    participant App as 应用程序
+    participant App as Application
     participant Agent
     participant EventBus
     participant Provider as Model Provider
     participant Tool as Tool Registry
     participant UI as UI Handler
     participant Approver as Approval Handler
-    
-    App->>Agent: RunAsync("分析代码")
-    
+
+    App->>Agent: RunAsync("Analyze code")
+
     Agent->>Provider: StreamAsync(messages)
-    
-    loop 流式响应
+
+    loop Stream response
         Provider-->>Agent: TextChunk
         Agent->>EventBus: Publish(Progress, TextChunk)
         EventBus-->>UI: TextChunkEvent
-        UI-->>UI: 渲染文本
+        UI-->>UI: Render text
     end
-    
+
     Provider-->>Agent: ToolUse(fs_read)
     Agent->>EventBus: Publish(Progress, ToolStart)
     EventBus-->>UI: ToolStartEvent
-    
+
     Agent->>Tool: ExecuteAsync(fs_read)
     Tool-->>Agent: ToolResult
-    
+
     Agent->>EventBus: Publish(Progress, ToolEnd)
     EventBus-->>UI: ToolEndEvent
-    
-    Note over Agent,Provider: 需要执行危险操作
-    
+
+    Note over Agent,Provider: Need to execute dangerous operation
+
     Provider-->>Agent: ToolUse(bash_run)
     Agent->>EventBus: Publish(Control, PermissionRequired)
     EventBus-->>Approver: PermissionRequiredEvent
-    
+
     Approver-->>Agent: ApproveToolCallAsync()
-    
+
     Agent->>Tool: ExecuteAsync(bash_run)
     Tool-->>Agent: ToolResult
-    
+
     Agent->>EventBus: Publish(Progress, Done)
     Agent-->>App: AgentRunResult
 ```
@@ -386,25 +375,23 @@ sequenceDiagram
 [Flags]
 public enum EventChannel
 {
-    Progress = 1, // 实时进度：文本流、工具执行状态
-    Control = 2,  // 控制流：审批请求/决定
-    Monitor = 4,  // 可观测性：状态/断点/错误/指标
+    Progress = 1, // Real-time progress: text stream, tool execution status
+    Control = 2,  // Control flow: approval requests/decisions
+    Monitor = 4,  // Observability: state/breakpoint/errors/metrics
     All = Progress | Control | Monitor
 }
 ```
 
-### 事件类型
-
-SDK 的事件 JSON 形状严格对齐 TS `src/core/types.ts`：
+### Event Types
 
 ```csharp
-// EventEnvelope（TS 对齐）：{ cursor, bookmark, event }
-// 其中 event 本体也带 channel/type/bookmark：
+// EventEnvelope: { cursor, bookmark, event }
+// event body also has channel/type/bookmark:
 // event.channel: "progress" | "control" | "monitor"
 // event.type: string
 // event.bookmark?: Bookmark
 
-// Progress（示例）
+// Progress (examples)
 // - text_chunk_start: { step }
 // - text_chunk: { step, delta }
 // - text_chunk_end: { step, text }
@@ -412,26 +399,26 @@ SDK 的事件 JSON 形状严格对齐 TS `src/core/types.ts`：
 // - tool:error: { call: ToolCallSnapshot, error }
 // - done: { step, reason: "completed" | "interrupted" }
 
-// Control（示例）
-// - permission_required: { call: ToolCallSnapshot } + respond(decision, { note? })（仅本地回调，不持久化）
+// Control (examples)
+// - permission_required: { call: ToolCallSnapshot } + respond(decision, { note? })
 // - permission_decided: { callId, decision: "allow" | "deny", decidedBy, note? }
 
-// Monitor（示例）
+// Monitor (examples)
 // - state_changed: { state }
 // - breakpoint_changed: { previous, current, timestamp }
 // - error: { severity, phase, message, detail? }
 // - token_usage: { inputTokens, outputTokens, totalTokens }
 ```
 
-### 事件订阅模式
+### Event Subscription Patterns
 
 ```csharp
-// 并行处理多个通道
+// Process multiple channels in parallel
 var progressTask = Task.Run(async () =>
 {
     await foreach (var e in agent.EventBus.SubscribeAsync(EventChannel.Progress))
     {
-        // 处理 Progress 事件
+        // Handle Progress events
     }
 });
 
@@ -439,63 +426,63 @@ var controlTask = Task.Run(async () =>
 {
     await foreach (var e in agent.EventBus.SubscribeAsync(EventChannel.Control))
     {
-        // 处理 Control 事件
+        // Handle Control events
     }
 });
 
-// 运行 Agent
-await agent.RunAsync("开始任务");
+// Run Agent
+await agent.RunAsync("Start task");
 
-// 等待事件处理完成
+// Wait for event processing to complete
 await Task.WhenAll(progressTask, controlTask);
 ```
 
 ---
 
-## 工具开发指南
+## Tool Development Guide
 
-### 工具执行流程
+### Tool Execution Flow
 
 ```mermaid
 flowchart TD
-    A[Agent 收到工具调用] --> B{工具是否存在?}
-    B -->|否| C[返回错误给 LLM]
-    B -->|是| D{检查权限}
+    A[Agent receives tool call] --> B{Tool exists?}
+    B -->|No| C[Return error to LLM]
+    B -->|Yes| D{Check permissions}
 
     D --> E{PermissionConfig}
-    E -->|在 denyTools 或不在 allowTools| I[拒绝执行]
-    E -->|在 requireApprovalTools| G[请求审批]
-    E -->|否则| J{mode}
+    E -->|In denyTools or not in allowTools| I[Deny execution]
+    E -->|In requireApprovalTools| G[Request approval]
+    E -->|Otherwise| J{mode}
 
-    J -->|auto| F[允许执行]
+    J -->|auto| F[Allow execution]
     J -->|approval| G
     J -->|readonly| K{descriptor.metadata.mutates/access}
     K -->|mutates/execute/write| I
     K -->|non-mutating| F
 
-    G --> L[发布 permission_required(control)]
-    L --> M{用户响应}
-    M -->|批准| F
-    M -->|拒绝| I
-    
-    F --> N[创建 ToolContext]
-    N --> O[执行工具]
-    O --> P{执行成功?}
-    P -->|是| Q[返回 ToolResult.Ok]
-    P -->|否| R[返回 ToolResult.Error]
-    
-    I --> S[返回拒绝消息给 LLM]
-    
-    Q --> T[继续 Agent 循环]
+    G --> L[Publish permission_required(control)]
+    L --> M{User response}
+    M -->|Approve| F
+    M -->|Deny| I
+
+    F --> N[Create ToolContext]
+    N --> O[Execute tool]
+    O --> P{Success?}
+    P -->|Yes| Q[Return ToolResult.Ok]
+    P -->|No| R[Return ToolResult.Error]
+
+    I --> S[Return denial message to LLM]
+
+    Q --> T[Continue Agent loop]
     R --> T
     S --> T
-    
+
     style F fill:#c8e6c9
     style G fill:#fff3e0
     style I fill:#ffcdd2
 ```
 
-### 工具接口
+### Tool Interface
 
 ```csharp
 public interface ITool
@@ -503,7 +490,7 @@ public interface ITool
     string Name { get; }
     string Description { get; }
     JsonElement InputSchema { get; }
-    
+
     Task<ToolResult> ExecuteAsync(
         JsonElement input,
         ToolContext context,
@@ -512,9 +499,9 @@ public interface ITool
 }
 ```
 
-### 使用 Source Generator
+### Using Source Generator
 
-Source Generator 在编译时生成工具的 Schema 和验证代码，避免运行时反射。
+Source Generator generates tool schema and validation code at compile time, avoiding runtime reflection.
 
 ```csharp
 using Kode.Agent.Sdk.Tools;
@@ -527,11 +514,11 @@ public partial class DatabaseQueryTool : ITool
     [ToolParameter("query", required: true)]
     [Description("SQL query to execute")]
     public string Query { get; set; } = "";
-    
+
     [ToolParameter("database")]
     [Description("Database name, defaults to 'main'")]
     public string Database { get; set; } = "main";
-    
+
     [ToolParameter("timeout")]
     [Description("Query timeout in seconds")]
     public int Timeout { get; set; } = 30;
@@ -545,10 +532,10 @@ public partial class DatabaseQueryTool : ITool
             {
                 CommandTimeout = Timeout
             };
-            
+
             await connection.OpenAsync(context.CancellationToken);
             using var reader = await command.ExecuteReaderAsync(context.CancellationToken);
-            
+
             var results = await ReadResultsAsync(reader);
             return ToolResult.Success(JsonSerializer.Serialize(results));
         }
@@ -560,15 +547,15 @@ public partial class DatabaseQueryTool : ITool
 }
 ```
 
-编译后生成的代码：
+Generated code after compilation:
 
 ```csharp
-// 自动生成 - 不要手动编辑
+// Auto-generated - do not edit manually
 public partial class DatabaseQueryTool
 {
     public string Name => "database_query";
     public string Description => "Execute SQL query on the database";
-    
+
     public JsonElement InputSchema => JsonDocument.Parse("""
     {
         "type": "object",
@@ -592,16 +579,16 @@ public partial class DatabaseQueryTool
 }
 ```
 
-### 工具注册
+### Tool Registration
 
 ```csharp
-// 单个工具
+// Single tool
 toolRegistry.Register<DatabaseQueryTool>();
 
-// 批量注册
+// Batch registration
 toolRegistry.RegisterFromAssembly(typeof(DatabaseQueryTool).Assembly);
 
-// 动态注册
+// Dynamic registration
 toolRegistry.Register(new ToolDefinition
 {
     Name = "custom_tool",
@@ -610,7 +597,7 @@ toolRegistry.Register(new ToolDefinition
 }, ExecuteCustomTool);
 ```
 
-### 工具上下文
+### Tool Context
 
 ```csharp
 public record ToolContext(
@@ -623,11 +610,11 @@ public record ToolContext(
 
 ---
 
-## Skills 系统
+## Skills System
 
-Skills 是一种渐进式披露机制，允许 Agent 按需发现和激活额外的能力，而不是一开始就加载所有内容到上下文中。
+Skills is a progressive disclosure mechanism that allows Agents to discover and activate additional capabilities on demand, rather than loading everything into context at startup.
 
-### Skills 架构
+### Skills Architecture
 
 ```mermaid
 graph TB
@@ -635,81 +622,81 @@ graph TB
         Core[Agent Core]
         SM[SkillsManager]
     end
-    
-    subgraph Discovery["发现阶段"]
-        Paths[技能搜索路径]
+
+    subgraph Discovery["Discovery Phase"]
+        Paths[Skill search paths]
         Loader[SkillsLoader]
-        Metadata[元数据列表]
+        Metadata[Metadata list]
     end
-    
-    subgraph Activation["激活阶段"]
-        FullLoad[加载完整内容]
+
+    subgraph Activation["Activation Phase"]
+        FullLoad[Load full content]
         Body[SKILL.md Body]
-        Resources[资源文件]
+        Resources[Resource files]
     end
-    
-    subgraph SkillDef["技能定义"]
+
+    subgraph SkillDef["Skill Definition"]
         MD[SKILL.md<br/>Frontmatter + Body]
         Scripts[scripts/]
         Refs[references/]
         Assets[assets/]
     end
-    
+
     Core --> SM
     SM --> Paths
     Paths --> Loader
     Loader --> Metadata
-    
+
     Metadata -->|skill_activate| FullLoad
     FullLoad --> Body
     FullLoad --> Resources
-    
+
     MD --> Loader
     Scripts --> Resources
     Refs --> Resources
     Assets --> Resources
-    
+
     style Discovery fill:#e3f2fd
     style Activation fill:#e8f5e9
 ```
 
-### Skills 生命周期
+### Skills Lifecycle
 
 ```mermaid
 sequenceDiagram
     participant Agent
     participant SM as SkillsManager
     participant Loader as SkillsLoader
-    participant FS as 文件系统
-    
-    Note over Agent,FS: 阶段1: 发现（轻量级）
+    participant FS as File System
+
+    Note over Agent,FS: Phase 1: Discovery (lightweight)
     Agent->>SM: DiscoverAsync()
-    SM->>Loader: 扫描技能路径
-    Loader->>FS: 读取 SKILL.md frontmatter
-    FS-->>Loader: 元数据
-    Loader-->>SM: Skill[] (仅元数据)
+    SM->>Loader: Scan skill paths
+    Loader->>FS: Read SKILL.md frontmatter
+    FS-->>Loader: Metadata
+    Loader-->>SM: Skill[] (metadata only)
     SM-->>Agent: SkillMetadata[]
-    
-    Note over Agent,FS: 阶段2: 激活（按需加载）
+
+    Note over Agent,FS: Phase 2: Activation (on-demand load)
     Agent->>SM: ActivateAsync("code-review")
     SM->>Loader: LoadFullAsync()
-    Loader->>FS: 读取完整 SKILL.md
-    Loader->>FS: 扫描 resources/
-    FS-->>Loader: 完整内容
-    Loader-->>SM: Skill (完整)
-    SM->>SM: 注入到系统提示
+    Loader->>FS: Read full SKILL.md
+    Loader->>FS: Scan resources/
+    FS-->>Loader: Full content
+    Loader-->>SM: Skill (complete)
+    SM->>SM: Inject into system prompt
     SM-->>Agent: Skill
-    
-    Note over Agent,FS: 阶段3: 使用
-    Agent->>Agent: 使用技能能力执行任务
+
+    Note over Agent,FS: Phase 3: Usage
+    Agent->>Agent: Use skill capability to execute task
 ```
 
-### SKILL.md 格式
+### SKILL.md Format
 
 ```markdown
 ---
 name: code-review
-description: 代码审查技能，帮助识别代码问题和改进建议
+description: Code review skill, helps identify code issues and improvement suggestions
 license: Apache-2.0
 compatibility: claude-3.5-sonnet, gpt-4o
 allowedTools:
@@ -718,31 +705,31 @@ allowedTools:
   - fs_glob
 ---
 
-# 代码审查指南
+# Code Review Guide
 
-## 审查重点
-1. 代码风格和一致性
-2. 潜在的 bug 和边界情况
-3. 性能优化机会
-4. 安全漏洞检查
+## Review Focus
+1. Code style and consistency
+2. Potential bugs and edge cases
+3. Performance optimization opportunities
+4. Security vulnerability checks
 
-## 输出格式
-请使用以下格式输出审查结果：
-- 🔴 严重问题
-- 🟡 建议改进
-- 🟢 良好实践
+## Output Format
+Please use the following format for review results:
+- 🔴 Critical issues
+- 🟡 Suggested improvements
+- 🟢 Good practices
 ```
 
-### 技能目录结构
+### Skill Directory Structure
 
 ```
 skills/
 ├── code-review/
-│   ├── SKILL.md           # 技能定义（必需）
+│   ├── SKILL.md           # Skill definition (required)
 │   └── resources/
-│       ├── scripts/       # 可执行脚本
-│       ├── references/    # 参考文档
-│       └── assets/        # 资源文件
+│       ├── scripts/       # Executable scripts
+│       ├── references/    # Reference documentation
+│       └── assets/        # Resource files
 ├── testing/
 │   ├── SKILL.md
 │   └── resources/
@@ -750,130 +737,130 @@ skills/
     └── SKILL.md
 ```
 
-### 配置 Skills
+### Configuring Skills
 
 ```csharp
 var skillsConfig = new SkillsConfig
 {
-    // 技能搜索路径
+    // Skill search paths
     Paths = ["./.kode/skills", "./skills"],
-    
-    // 白名单：只加载这些技能
+
+    // Whitelist: only load these skills
     Include = ["code-review", "testing"],
-    
-    // 黑名单：排除这些技能
+
+    // Blacklist: exclude these skills
     Exclude = ["deprecated-skill"],
-    
-    // 受信任源：允许脚本执行
+
+    // Trusted sources: allow script execution
     Trusted = ["code-review"],
-    
-    // 加载时验证格式
+
+    // Validate format on load
     ValidateOnLoad = true
 };
 
-// 创建技能管理器
+// Create skills manager
 var skillsManager = new SkillsManager(skillsConfig, sandbox, store, agentId);
 
-// 发现技能（轻量级，只读元数据）
+// Discover skills (lightweight, metadata only)
 var skills = await skillsManager.DiscoverAsync();
 
-// 激活技能（按需加载完整内容）
+// Activate skill (on-demand full content load)
 var skill = await skillsManager.ActivateAsync("code-review");
 ```
 
-### 技能工具
+### Skill Tools
 
-| 工具 | 描述 |
+| Tool | Description |
 |------|------|
-| `skill_list` | 列出可用技能及其激活状态 |
-| `skill_activate` | 激活指定技能 |
-| `skill_resource` | 读取技能资源文件 |
+| `skill_list` | List available skills and their activation status |
+| `skill_activate` | Activate specified skill |
+| `skill_resource` | Read skill resource files |
 
 ```csharp
-// Agent 可以通过工具自主管理技能
-// skill_list - 查看可用技能
-// skill_activate - 激活需要的技能
-// skill_resource - 读取技能资源
+// Agent can autonomously manage skills through tools
+// skill_list - View available skills
+// skill_activate - Activate needed skills
+// skill_resource - Read skill resources
 ```
 
 ---
 
-## Sub-Agent 任务委派
+## Sub-Agent Task Delegation
 
-Sub-Agent 机制允许主 Agent 将复杂任务委派给专门的子 Agent，实现分工协作和工作流编排。
+Sub-Agent mechanism allows main Agent to delegate complex tasks to specialized sub-agents, enabling division of labor and workflow orchestration.
 
-### Sub-Agent 架构
+### Sub-Agent Architecture
 
 ```mermaid
 graph TB
-    subgraph Main["主 Agent"]
-        MainAgent[Main Agent<br/>协调者]
-        TaskRun[task_run 工具]
+    subgraph Main["Main Agent"]
+        MainAgent[Main Agent<br/>Coordinator]
+        TaskRun[task_run tool]
     end
-    
-    subgraph Templates["Agent 模板"]
-        T1[code-analyst<br/>代码分析]
-        T2[test-writer<br/>测试编写]
-        T3[doc-generator<br/>文档生成]
+
+    subgraph Templates["Agent Templates"]
+        T1[code-analyst<br/>Code analysis]
+        T2[test-writer<br/>Test writing]
+        T3[doc-generator<br/>Doc generation]
     end
-    
+
     subgraph SubAgents["Sub-Agents"]
         SA1[Sub-Agent 1]
         SA2[Sub-Agent 2]
         SA3[Sub-Agent 3]
     end
-    
+
     MainAgent --> TaskRun
-    TaskRun -->|委派| T1
-    TaskRun -->|委派| T2
-    TaskRun -->|委派| T3
-    
-    T1 -.->|实例化| SA1
-    T2 -.->|实例化| SA2
-    T3 -.->|实例化| SA3
-    
-    SA1 -->|结果| MainAgent
-    SA2 -->|结果| MainAgent
-    SA3 -->|结果| MainAgent
-    
+    TaskRun -->|Delegate| T1
+    TaskRun -->|Delegate| T2
+    TaskRun -->|Delegate| T3
+
+    T1 -.->|Instantiate| SA1
+    T2 -.->|Instantiate| SA2
+    T3 -.->|Instantiate| SA3
+
+    SA1 -->|Result| MainAgent
+    SA2 -->|Result| MainAgent
+    SA3 -->|Result| MainAgent
+
     style Main fill:#e3f2fd
     style Templates fill:#fff3e0
     style SubAgents fill:#e8f5e9
 ```
 
-### 任务委派流程
+### Task Delegation Flow
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Main as 主 Agent
+    participant Main as Main Agent
     participant TaskRun as task_run
-    participant Template as 模板系统
+    participant Template as Template System
     participant SubAgent as Sub-Agent
-    
-    User->>Main: "重构这个模块并编写测试"
-    
-    Main->>Main: 分解任务
-    
-    Main->>TaskRun: 委派代码分析
-    TaskRun->>Template: 查找 code-analyst 模板
-    Template->>SubAgent: 创建 Sub-Agent
-    SubAgent->>SubAgent: 执行分析任务
-    SubAgent-->>TaskRun: 分析结果
-    TaskRun-->>Main: 返回结果
-    
-    Main->>TaskRun: 委派测试编写
-    TaskRun->>Template: 查找 test-writer 模板
-    Template->>SubAgent: 创建 Sub-Agent
-    SubAgent->>SubAgent: 编写测试
-    SubAgent-->>TaskRun: 测试代码
-    TaskRun-->>Main: 返回结果
-    
-    Main->>Main: 整合结果
-    Main-->>User: 完成报告
+
+    User->>Main: "Refactor this module and write tests"
+
+    Main->>Main: Break down task
+
+    Main->>TaskRun: Delegate code analysis
+    TaskRun->>Template: Find code-analyst template
+    Template->>SubAgent: Create Sub-Agent
+    SubAgent->>SubAgent: Execute analysis task
+    SubAgent-->>TaskRun: Analysis result
+    TaskRun-->>Main: Return result
+
+    Main->>TaskRun: Delegate test writing
+    TaskRun->>Template: Find test-writer template
+    Template->>SubAgent: Create Sub-Agent
+    SubAgent->>SubAgent: Write tests
+    SubAgent-->>TaskRun: Test code
+    TaskRun-->>Main: Return result
+
+    Main->>Main: Integrate results
+    Main-->>User: Completion report
 ```
 
-### 定义 Agent 模板
+### Defining Agent Templates
 
 ```csharp
 var templates = new List<AgentTemplate>
@@ -881,65 +868,65 @@ var templates = new List<AgentTemplate>
     new AgentTemplate
     {
         Id = "code-analyst",
-        System = "你是一个专业的代码分析师。专注于代码质量、架构和潜在问题。",
+        System = "You are a professional code analyst. Focus on code quality, architecture, and potential issues.",
         Tools = ["fs_read", "fs_grep", "fs_glob"],
-        WhenToUse = "分析代码结构、识别问题、提供改进建议"
+        WhenToUse = "Analyze code structure, identify issues, provide improvement suggestions"
     },
     new AgentTemplate
     {
         Id = "test-writer",
-        System = "你是一个测试工程师。专注于编写全面的单元测试和集成测试。",
+        System = "You are a test engineer. Focus on writing comprehensive unit tests and integration tests.",
         Tools = ["fs_read", "fs_write", "bash_run"],
-        WhenToUse = "编写测试用例、提高代码覆盖率"
+        WhenToUse = "Write test cases, improve code coverage"
     },
     new AgentTemplate
     {
         Id = "doc-generator",
-        System = "你是一个技术文档专家。专注于生成清晰、准确的文档。",
+        System = "You are a technical documentation expert. Focus on generating clear, accurate documentation.",
         Tools = ["fs_read", "fs_write"],
-        WhenToUse = "生成 API 文档、README、使用指南"
+        WhenToUse = "Generate API docs, README, usage guides"
     }
 };
 
-// 创建 task_run 工具
+// Create task_run tool
 var taskRunTool = TaskRunToolFactory.Create(templates);
 toolRegistry.Register(taskRunTool);
 ```
 
-### 使用 task_run 工具
+### Using task_run Tool
 
-Agent 通过 `task_run` 工具委派任务：
+Agent delegates tasks through `task_run` tool:
 
 ```json
 {
   "tool": "task_run",
   "arguments": {
     "agent_template_id": "code-analyst",
-    "description": "分析用户认证模块",
-    "prompt": "请分析 src/auth/ 目录下的代码，识别安全漏洞和改进机会",
-    "context": "这是一个使用 JWT 的 Node.js 应用"
+    "description": "Analyze user authentication module",
+    "prompt": "Please analyze the code under src/auth/ directory, identify security vulnerabilities and improvement opportunities",
+    "context": "This is a Node.js application using JWT"
   }
 }
 ```
 
-### Sub-Agent 配置
+### Sub-Agent Configuration
 
 ```csharp
-// 在模板中配置 Sub-Agent 行为
+// Configure Sub-Agent behavior in template
 var runtimeConfig = new TemplateRuntimeConfig
 {
     SubAgents = new SubAgentConfig
     {
-        // 允许使用的模板
+        // Allowed templates
         Templates = ["code-analyst", "test-writer"],
-        
-        // 最大嵌套深度（防止无限递归）
+
+        // Maximum nesting depth (prevent infinite recursion)
         Depth = 2,
-        
-        // 继承父配置
+
+        // Inherit parent config
         InheritConfig = true,
-        
-        // 覆盖配置
+
+        // Override config
         Overrides = new SubAgentOverrides
         {
             Permission = new PermissionConfig
@@ -953,38 +940,38 @@ var runtimeConfig = new TemplateRuntimeConfig
 
 ### Sub-Agent vs Skills
 
-| 特性 | Skills | Sub-Agent |
+| Feature | Skills | Sub-Agent |
 |------|--------|-----------|
-| **用途** | 扩展单个 Agent 的能力 | 将任务委派给专门的 Agent |
-| **执行** | 在同一 Agent 上下文中 | 独立的 Agent 实例 |
-| **状态** | 共享 Agent 状态 | 隔离的状态 |
-| **适用场景** | 添加特定领域知识 | 复杂多步骤任务分解 |
-| **开销** | 轻量级 | 较重（新 Agent 实例） |
+| **Purpose** | Extend single Agent capabilities | Delegate tasks to specialized Agents |
+| **Execution** | In same Agent context | Independent Agent instances |
+| **State** | Shared Agent state | Isolated state |
+| **Use Cases** | Add domain-specific knowledge | Complex multi-step task breakdown |
+| **Overhead** | Lightweight | Heavier (new Agent instances) |
 
 ---
 
-## 模型提供者深入
+## Model Providers Deep Dive
 
-### 自定义提供者
+### Custom Provider
 
 ```csharp
 public class CustomProvider : IModelProvider
 {
     public string Name => "custom";
-    
+
     public async IAsyncEnumerable<StreamingContent> StreamAsync(
         IReadOnlyList<Message> messages,
         ModelOptions options,
         IReadOnlyList<ToolDefinition> tools,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // 1. 构建请求
+        // 1. Build request
         var request = BuildRequest(messages, options, tools);
-        
-        // 2. 发送请求并获取流
+
+        // 2. Send request and get stream
         var stream = await SendStreamingRequest(request, cancellationToken);
-        
-        // 3. 解析并产出内容
+
+        // 3. Parse and yield content
         await foreach (var chunk in ParseStream(stream, cancellationToken))
         {
             if (chunk.IsText)
@@ -1004,10 +991,10 @@ public class CustomProvider : IModelProvider
 }
 ```
 
-### 提供者选项
+### Provider Options
 
 ```csharp
-// Anthropic 选项
+// Anthropic options
 public class AnthropicOptions
 {
     public string ApiKey { get; set; } = "";
@@ -1018,7 +1005,7 @@ public class AnthropicOptions
     public Dictionary<string, string> CustomHeaders { get; set; } = new();
 }
 
-// OpenAI 选项
+// OpenAI options
 public class OpenAIOptions
 {
     public string ApiKey { get; set; } = "";
@@ -1031,66 +1018,66 @@ public class OpenAIOptions
 
 ---
 
-## 错误处理
+## Error Handling
 
-### 异常类型
+### Exception Types
 
 ```csharp
-// 基础异常
+// Base exception
 public class KodeAgentException : Exception { }
 
-// 提供者错误
+// Provider error
 public class ProviderException : KodeAgentException
 {
     public string ProviderName { get; }
     public int? StatusCode { get; }
 }
 
-// 工具执行错误
+// Tool execution error
 public class ToolExecutionException : KodeAgentException
 {
     public string ToolName { get; }
     public JsonElement Input { get; }
 }
 
-// 配置错误
+// Configuration error
 public class ConfigurationException : KodeAgentException { }
 ```
 
-### 错误处理模式
+### Error Handling Patterns
 
 ```csharp
 try
 {
-    await agent.RunAsync("执行任务");
+    await agent.RunAsync("Execute task");
 }
 catch (ProviderException ex) when (ex.StatusCode == 429)
 {
-    // 速率限制，等待重试
+    // Rate limit, wait and retry
     await Task.Delay(TimeSpan.FromSeconds(60));
-    await agent.RunAsync("执行任务");
+    await agent.RunAsync("Execute task");
 }
 catch (ProviderException ex) when (ex.StatusCode == 401)
 {
-    // API 密钥无效
+    // Invalid API key
     throw new ConfigurationException("Invalid API key", ex);
 }
 catch (ToolExecutionException ex)
 {
-    // 工具执行失败
+    // Tool execution failed
     logger.LogError(ex, "Tool {Tool} failed", ex.ToolName);
-    // Agent 会自动向 LLM 报告错误
+    // Agent will automatically report error to LLM
 }
 catch (OperationCanceledException)
 {
-    // 任务被取消
-    // TS 对齐：运行中会持续持久化 messages/tool-calls/todos/meta/events；
-    // 如需保留一个“可 fork 的安全分叉点”，使用 Snapshot。
+    // Task cancelled
+    // Runtime continuously persists messages/tool-calls/todos/meta/events;
+    // To preserve a "forkable safe branch point", use Snapshot.
     await agent.SnapshotAsync();
 }
 ```
 
-### 通过事件处理错误
+### Handling Errors Through Events
 
 ```csharp
 await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Progress))
@@ -1098,11 +1085,11 @@ await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Progre
     if (envelope.Event is ErrorEvent error)
     {
         logger.LogError(error.Exception, "Agent error occurred");
-        
+
         if (error.Exception is ProviderException pe && pe.StatusCode == 429)
         {
-            // 通知用户速率限制
-            Console.WriteLine("请求过于频繁，请稍后再试");
+            // Notify user of rate limit
+            Console.WriteLine("Too many requests, please try again later");
         }
     }
 }
@@ -1110,17 +1097,17 @@ await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Progre
 
 ---
 
-## 最佳实践
+## Best Practices
 
-### 1. 使用 Serilog 结构化日志
+### 1. Use Serilog Structured Logging
 
-推荐使用 Serilog 进行结构化日志记录：
+Recommended to use Serilog for structured logging:
 
 ```csharp
 using Serilog;
 using Serilog.Events;
 
-// 配置 Serilog（在创建 WebApplication 之前）
+// Configure Serilog (before creating WebApplication)
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -1140,9 +1127,9 @@ try
     Log.Information("Starting Kode.Agent WebApi Assistant");
 
     var builder = WebApplication.CreateBuilder(args);
-    builder.Host.UseSerilog();  // 使用 Serilog
+    builder.Host.UseSerilog();  // Use Serilog
 
-    // ... 服务配置 ...
+    // ... service configuration ...
 
     var app = builder.Build();
     Log.Information("Application started successfully");
@@ -1158,15 +1145,15 @@ finally
 }
 ```
 
-**对于非 WebAPI 应用：**
+**For non-WebAPI applications:**
 ```csharp
-// 使用依赖注入
+// Use dependency injection
 var services = new ServiceCollection();
 services.AddSingleton<ILoggerFactory>(sp =>
 {
     var loggerFactory = LoggerFactory.Create(builder =>
     {
-        builder.AddSerilog();  // 集成 Serilog
+        builder.AddSerilog();  // Integrate Serilog
     });
     return loggerFactory;
 });
@@ -1178,18 +1165,18 @@ var deps = new AgentDependencies
 };
 ```
 
-### 2. 合理设置超时
+### 2. Set Reasonable Timeouts
 
 ```csharp
-// Agent 级别
+// Agent level
 var config = new AgentConfig
 {
-    MaxIterations = 20,           // 限制迭代次数
-    IterationTimeout = TimeSpan.FromMinutes(2),  // 单次迭代超时
-    TotalTimeout = TimeSpan.FromMinutes(30)      // 总超时
+    MaxIterations = 20,           // Limit iterations
+    IterationTimeout = TimeSpan.FromMinutes(2),  // Per-iteration timeout
+    TotalTimeout = TimeSpan.FromMinutes(30)      // Total timeout
 };
 
-// 工具级别
+// Tool level
 using var cts = CancellationTokenSource.CreateLinkedTokenSource(
     context.CancellationToken
 );
@@ -1198,7 +1185,7 @@ cts.CancelAfter(TimeSpan.FromSeconds(30));
 await ExecuteLongOperation(cts.Token);
 ```
 
-### 3. 实现优雅关闭
+### 3. Implement Graceful Shutdown
 
 ```csharp
 var cts = new CancellationTokenSource();
@@ -1210,28 +1197,28 @@ Console.CancelKeyPress += (s, e) =>
 
 try
 {
-    await agent.RunAsync("长时间任务", cts.Token);
+    await agent.RunAsync("Long running task", cts.Token);
 }
 catch (OperationCanceledException)
 {
-    Console.WriteLine("正在保存状态...");
+    Console.WriteLine("Saving state...");
     await agent.SnapshotAsync();
-    Console.WriteLine("已安全退出");
+    Console.WriteLine("Exited safely");
 }
 ```
 
-### 4. 资源管理
+### 4. Resource Management
 
 ```csharp
-// 使用 using 确保清理
+// Use using to ensure cleanup
 await using var agent = await Agent.CreateAsync(id, config, deps);
-await agent.RunAsync("任务");
+await agent.RunAsync("Task");
 
-// 或手动管理
+// Or manual management
 var agent = await Agent.CreateAsync(id, config, deps);
 try
 {
-    await agent.RunAsync("任务");
+    await agent.RunAsync("Task");
 }
 finally
 {
@@ -1239,11 +1226,11 @@ finally
 }
 ```
 
-### 5. 工具权限控制
+### 5. Tool Permission Control
 
 ```csharp
-// 创建受限工具集
-var safeTools = new[] { "fs_read", "fs_glob" };  // 只读操作
+// Create restricted tool set
+var safeTools = new[] { "fs_read", "fs_glob" };  // Read-only operations
 
 var config = new AgentConfig
 {
@@ -1251,7 +1238,7 @@ var config = new AgentConfig
     // ...
 };
 
-// 或使用工具包装器实现权限检查
+// Or use tool wrapper for permission checks
 toolRegistry.Register(
     new PermissionWrapper(
         innerTool: new ShellExecTool(),
@@ -1260,14 +1247,14 @@ toolRegistry.Register(
 );
 ```
 
-### 6. 会话管理
+### 6. Session Management
 
 ```csharp
-// 基于会话ID管理多个Agent
+// Manage multiple Agents based on session ID
 public class SessionManager
 {
     private readonly ConcurrentDictionary<string, Agent> _sessions = new();
-    
+
     public async Task<Agent> GetOrCreateAsync(string sessionId)
     {
         return await _sessions.GetOrAddAsync(sessionId, async id =>
@@ -1282,7 +1269,7 @@ public class SessionManager
             }
         });
     }
-    
+
     public async Task EndSessionAsync(string sessionId)
     {
         if (_sessions.TryRemove(sessionId, out var agent))
@@ -1295,20 +1282,20 @@ public class SessionManager
 
 ---
 
-## 常见问题
+## Common Questions
 
-### Q: 如何处理大文件？
+### Q: How to handle large files?
 
 ```csharp
-// 使用流式读取
+// Use streaming read
 var tool = new StreamingFileReader();
 await foreach (var chunk in tool.ReadChunksAsync(filePath))
 {
-    // 处理块
+    // Process chunks
 }
 ```
 
-### Q: 如何限制 Token 使用？
+### Q: How to limit Token usage?
 
 ```csharp
 var config = new AgentConfig
@@ -1318,32 +1305,32 @@ var config = new AgentConfig
 };
 ```
 
-### Q: 如何切换模型？
+### Q: How to switch models?
 
 ```csharp
-// 可以在运行时切换
+// Can switch at runtime
 agent.Config.Model = "claude-3-5-haiku-20241022";
 
-// 或为不同任务使用不同配置
+// Or use different configs for different tasks
 var fastConfig = config with { Model = "claude-3-5-haiku-20241022" };
 var smartConfig = config with { Model = "claude-sonnet-4-20250514" };
 ```
 
 ---
 
-## 示例项目
+## Example Projects
 
-查看 `examples/` 目录获取更多示例：
+See `examples/` directory for more examples:
 
-- **GettingStarted** - 基础用法
-- **AgentInbox** - 多 Agent 协作
-- **ApprovalControl** - 人工审批流程
-- **RoomCollab** - 实时协作场景
-- **CustomToolsExample** - 自定义工具开发
-- **HooksUsage** - 生命周期钩子
-- **TemplateUsage** - Agent 模板系统
-- **SchedulerUsage** - 定时任务调度
-- **EventBusUsage** - 事件总线详解
+- **GettingStarted** - Basic usage
+- **AgentInbox** - Multi-Agent collaboration
+- **ApprovalControl** - Manual approval process
+- **RoomCollab** - Real-time collaboration scenarios
+- **CustomToolsExample** - Custom tool development
+- **HooksUsage** - Lifecycle hooks
+- **TemplateUsage** - Agent template system
+- **SchedulerUsage** - Scheduled task management
+- **EventBusUsage** - Event bus details
 
 ```bash
 cd examples/Kode.Agent.Examples
@@ -1352,11 +1339,11 @@ dotnet run
 
 ---
 
-## MCP 协议集成
+## MCP Protocol Integration
 
-SDK 原生支持 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)，可轻松接入外部工具生态。
+SDK has native support for [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), making it easy to integrate external tool ecosystems.
 
-### MCP 架构图
+### MCP Architecture Diagram
 
 ```mermaid
 graph TB
@@ -1366,48 +1353,48 @@ graph TB
         McpProvider[McpToolProvider]
         McpClient[McpClientManager]
     end
-    
-    subgraph McpServers["MCP 服务器"]
-        subgraph Stdio["Stdio 传输"]
+
+    subgraph McpServers["MCP Servers"]
+        subgraph Stdio["Stdio Transport"]
             FS[filesystem-server]
             GitHub[github-server]
             Postgres[postgres-server]
         end
-        
-        subgraph HTTP["HTTP/SSE 传输"]
-            Remote[远程 MCP 服务器]
-            Custom[自定义服务器]
+
+        subgraph HTTP["HTTP/SSE Transport"]
+            Remote[Remote MCP Server]
+            Custom[Custom Server]
         end
     end
-    
-    subgraph Tools["提供的工具"]
+
+    subgraph Tools["Provided Tools"]
         FSTools[read_file<br/>write_file<br/>list_directory]
         GitTools[create_issue<br/>list_repos<br/>create_pr]
         DBTools[query<br/>list_tables]
         RemoteTools[custom_tool_1<br/>custom_tool_2]
     end
-    
+
     Agent --> Registry
     Registry --> McpProvider
     McpProvider --> McpClient
-    
+
     McpClient -->|spawn| FS
     McpClient -->|spawn| GitHub
     McpClient -->|spawn| Postgres
     McpClient -->|HTTP| Remote
     McpClient -->|HTTP| Custom
-    
+
     FS --> FSTools
     GitHub --> GitTools
     Postgres --> DBTools
     Remote --> RemoteTools
-    
+
     style KodeAgent fill:#e3f2fd
     style McpServers fill:#f3e5f5
     style Tools fill:#e8f5e9
 ```
 
-### MCP 通信流程
+### MCP Communication Flow
 
 ```mermaid
 sequenceDiagram
@@ -1415,39 +1402,39 @@ sequenceDiagram
     participant McpProvider
     participant McpClient
     participant Server as MCP Server
-    
-    Note over Agent,Server: 初始化阶段
-    Agent->>McpProvider: 注册 MCP 配置
-    McpProvider->>McpClient: 创建客户端
+
+    Note over Agent,Server: Initialization Phase
+    Agent->>McpProvider: Register MCP config
+    McpProvider->>McpClient: Create client
     McpClient->>Server: spawn/connect
-    Server-->>McpClient: 初始化完成
+    Server-->>McpClient: Initialization complete
     McpClient->>Server: tools/list
-    Server-->>McpClient: 工具列表
-    McpClient-->>McpProvider: 注册工具
-    
-    Note over Agent,Server: 运行阶段
+    Server-->>McpClient: Tool list
+    McpClient-->>McpProvider: Register tools
+
+    Note over Agent,Server: Runtime Phase
     Agent->>McpProvider: ExecuteAsync(tool, args)
     McpProvider->>McpClient: CallToolAsync
     McpClient->>Server: tools/call
-    Server-->>McpClient: 工具结果
+    Server-->>McpClient: Tool result
     McpClient-->>McpProvider: ToolResult
     McpProvider-->>Agent: ToolResult
 ```
 
-### 什么是 MCP？
+### What is MCP?
 
-MCP 是一个开放协议，允许 AI 模型与外部工具和数据源进行标准化交互。通过 MCP，您可以：
+MCP is an open protocol that allows AI models to interact with external tools and data sources in a standardized way. Through MCP, you can:
 
-- 连接到数千个现有的 MCP 服务器
-- 统一管理来自不同来源的工具
-- 无需编写适配器代码
+- Connect to thousands of existing MCP servers
+- Unify tool management from different sources
+- No adapter code needed
 
-### 配置 MCP 服务器
+### Configuring MCP Servers
 
 ```csharp
 using Kode.Agent.Mcp;
 
-// Stdio 传输（子进程方式）
+// Stdio transport (subprocess)
 var stdioConfig = new McpConfig
 {
     Transport = McpTransportType.Stdio,
@@ -1460,7 +1447,7 @@ var stdioConfig = new McpConfig
     }
 };
 
-// HTTP/SSE 传输
+// HTTP/SSE transport
 var httpConfig = new McpConfig
 {
     Transport = McpTransportType.Http,
@@ -1473,9 +1460,9 @@ var httpConfig = new McpConfig
 };
 ```
 
-### 从 appsettings.json 加载 MCP 服务器
+### Loading MCP Servers from appsettings.json
 
-在 WebAPI 应用中，可以使用 `McpServersLoader` 从配置文件加载 MCP 服务器：
+In WebAPI applications, you can use `McpServersLoader` to load MCP servers from configuration:
 
 **appsettings.json:**
 ```json
@@ -1508,13 +1495,13 @@ var httpConfig = new McpConfig
 
 **Program.cs:**
 ```csharp
-// 注册 MCP 服务
+// Register MCP services
 builder.Services.AddMcpClientManager();
 builder.Services.AddSingleton<McpServersLoader>();
 
 var app = builder.Build();
 
-// 启动时加载 MCP 工具
+// Load MCP tools on startup
 var mcpLoader = app.Services.GetRequiredService<McpServersLoader>();
 var toolRegistry = app.Services.GetRequiredService<IToolRegistry>();
 var mcpToolCount = await mcpLoader.LoadAndRegisterServersAsync(
@@ -1525,7 +1512,7 @@ var mcpToolCount = await mcpLoader.LoadAndRegisterServersAsync(
 Log.Information("[MCP] Loaded {Count} tools from MCP servers", mcpToolCount);
 ```
 
-### 工具过滤
+### Tool Filtering
 
 ```csharp
 var config = new McpConfig
@@ -1533,14 +1520,14 @@ var config = new McpConfig
     Transport = McpTransportType.Stdio,
     Command = "npx",
     Args = ["-y", "@modelcontextprotocol/server-github"],
-    // 只包含特定工具
+    // Only include specific tools
     Include = ["create_issue", "list_issues", "get_issue"],
-    // 或排除特定工具
+    // Or exclude specific tools
     Exclude = ["delete_repository"]
 };
 ```
 
-### 在依赖注入中使用
+### Using in Dependency Injection
 
 ```csharp
 services.AddMcpToolProvider(options =>
@@ -1569,84 +1556,80 @@ services.AddMcpToolProvider(options =>
 });
 ```
 
-### 常用 MCP 服务器
+### Common MCP Servers
 
-| 服务器 | 描述 | 安装命令 |
+| Server | Description | Install Command |
 |--------|------|----------|
-| filesystem | 文件系统操作 | `npx @modelcontextprotocol/server-filesystem` |
+| filesystem | File system operations | `npx @modelcontextprotocol/server-filesystem` |
 | github | GitHub API | `npx @modelcontextprotocol/server-github` |
-| postgres | PostgreSQL 数据库 | `npx @modelcontextprotocol/server-postgres` |
-| memory | 知识图谱存储 | `npx @modelcontextprotocol/server-memory` |
-| brave-search | 网络搜索 | `npx @anthropic-ai/mcp-server-brave-search` |
+| postgres | PostgreSQL database | `npx @modelcontextprotocol/server-postgres` |
+| memory | Knowledge graph storage | `npx @modelcontextprotocol/server-memory` |
+| brave-search | Web search | `npx @anthropic-ai/mcp-server-brave-search` |
 
 ---
 
-## 权限控制系统
+## Permission Control System
 
-SDK 提供灵活且细粒度的权限控制机制，确保 Agent 在安全边界内运行。
+SDK provides flexible and fine-grained permission control mechanism to ensure Agent operates within secure boundaries.
 
-### 权限决策流程
+### Permission Decision Flow
 
 ```mermaid
 flowchart TD
-    A[工具调用请求] --> B{denyTools 或不在 allowTools?}
-    B -->|是| C[❌ 拒绝执行]
-    B -->|否| D{requireApprovalTools?}
-    D -->|是| G[⏳ 请求用户审批]
-    D -->|否| H{mode}
+    A[Tool call request] --> B{In denyTools or not in allowTools?}
+    B -->|Yes| C[❌ Deny execution]
+    B -->|No| D{In requireApprovalTools?}
+    D -->|Yes| G[⏳ Request user approval]
+    D -->|No| H{mode}
 
-    H -->|auto| M[✅ 执行工具]
+    H -->|auto| M[✅ Execute tool]
     H -->|approval| G
     H -->|readonly| I{descriptor.metadata.mutates/access}
     I -->|mutates/execute/write| C
     I -->|non-mutating| M
 
-    G --> L{用户响应}
-    L -->|批准| M
-    L -->|拒绝| N[❌ 返回拒绝消息]
-    
-    style E fill:#c8e6c9
+    G --> L{User response}
+    L -->|Approve| M
+    L -->|Deny| N[❌ Return denial message]
+
     style M fill:#c8e6c9
     style C fill:#ffcdd2
     style N fill:#ffcdd2
     style G fill:#fff3e0
 ```
 
-### 权限模式对比
+### Permission Mode Comparison
 
 ```mermaid
 graph LR
-    subgraph Auto["auto 模式"]
-        A1[默认允许] -->|可配合 lists 细化| A2[✅ 执行]
+    subgraph Auto["auto mode"]
+        A1[Default allow] -->|Can refine with lists| A2[✅ Execute]
     end
 
-    subgraph Approval["approval 模式"]
-        B1[所有工具] -->|手动| B2[⏳ 审批]
+    subgraph Approval["approval mode"]
+        B1[All tools] -->|Manual| B2[⏳ Approval]
     end
 
-    subgraph Readonly["readonly 模式"]
-        R1[mutates/execute/write] -->|拒绝| R2[❌ 禁止]
-        R3[non-mutating] -->|允许| R4[✅ 执行]
+    subgraph Readonly["readonly mode"]
+        R1[mutates/execute/write] -->|Deny| R2[❌ Block]
+        R3[non-mutating] -->|Allow| R4[✅ Execute]
     end
-    
-    style D2 fill:#c8e6c9
+
     style A2 fill:#c8e6c9
-    style C2 fill:#c8e6c9
-    style D4 fill:#fff3e0
-    style R2 fill:#fff3e0
-    style C4 fill:#fff3e0
-    style C6 fill:#ffcdd2
+    style B2 fill:#fff3e0
+    style R2 fill:#ffcdd2
+    style R4 fill:#c8e6c9
 ```
 
-### 权限模式
+### Permission Modes
 
-权限模式（对齐 TS）：
-- `Mode="auto"`：默认允许（可配合 `AllowTools/DenyTools/RequireApprovalTools` 细化）
-- `Mode="approval"`：所有工具都走审批（`permission_required`）
-- `Mode="readonly"`：基于 `ToolDescriptor.metadata` 判断是否会产生副作用；会变更的工具 deny，其余 allow/ask
-- `Mode="<custom>"`：宿主进程可注册自定义 permission mode handler（参见 `permission-modes`）
+Permission modes:
+- `Mode="auto"`：Default allow (can be refined with `AllowTools/DenyTools/RequireApprovalTools`)
+- `Mode="approval"`：All tools require approval (`permission_required`)
+- `Mode="readonly"`：Based on `ToolDescriptor.metadata` to determine if it produces side effects; tools that mutate get denied, others allow/ask
+- `Mode="<custom>"`：Host process can register custom permission mode handler
 
-### 配置示例
+### Configuration Example
 
 ```csharp
 var config = new AgentConfig
@@ -1656,41 +1639,41 @@ var config = new AgentConfig
     Permissions = new PermissionConfig
     {
         Mode = "auto",
-        // 允许的工具白名单（可选；设置后不在列表的工具直接 deny）
+        // Tool whitelist (optional; if set, tools not in list are denied)
         AllowTools = ["fs_read", "fs_write", "fs_edit", "bash_run", "fs_rm"],
-        // 强制需要审批的工具
+        // Tools that require approval
         RequireApprovalTools = ["bash_run", "fs_rm"],
-        // 完全禁止的工具
+        // Completely forbidden tools
         DenyTools = []
     }
 };
 ```
 
-### MCP 工具的权限配置
+### MCP Tool Permission Configuration
 
-MCP 工具使用命名空间命名格式：`mcp__{serverName}__{toolName}`
+MCP tools use namespaced naming format: `mcp__{serverName}__{toolName}`
 
-例如：
+Examples:
 - `mcp__chrome-devtools__take_screenshot`
 - `mcp__filesystem__read_file`
 - `mcp__github__create_issue`
 
-由于 MCP 工具名称是动态生成的，推荐使用 `*` 通配符来允许所有工具（包括 MCP 工具）：
+Since MCP tool names are dynamically generated, it's recommended to use the `*` wildcard to allow all tools (including MCP tools):
 
 ```csharp
 var permissions = new PermissionConfig
 {
     Mode = "auto",
-    // 使用 * 通配符允许所有工具（包括 MCP 工具）
-    AllowTools = ["*"],  // 或 "*,fs_read,fs_write,..." 确保包含其他工具
-    // 对于需要审批的工具，仍然可以明确指定
+    // Use * wildcard to allow all tools (including MCP tools)
+    AllowTools = ["*"],  // Or "*,fs_read,fs_write,..." to ensure other tools are included
+    // For tools requiring approval, can still specify explicitly
     RequireApprovalTools = ["bash_run", "fs_rm", "mcp__*__delete_*"],
-    // 禁止的工具也可以使用通配符模式
+    // Forbidden tools can also use wildcard patterns
     DenyTools = ["bash_kill"]
 };
 ```
 
-**appsettings.json 配置示例：**
+**appsettings.json configuration example:**
 ```json
 {
   "Kode": {
@@ -1702,64 +1685,64 @@ var permissions = new PermissionConfig
 }
 ```
 
-`*` 通配符匹配任何工具名称，这样可以确保 MCP 工具自动获得执行权限，而无需手动列出每个 `mcp__*__*` 工具。
+The `*` wildcard matches any tool name, ensuring MCP tools automatically get execution permission without manually listing each `mcp__*__*` tool.
 
-### 处理审批请求
+### Handling Approval Requests
 
 ```csharp
 await foreach (var envelope in agent.EventBus.SubscribeAsync(EventChannel.Control))
 {
     if (envelope.Event is PermissionRequiredEvent permission)
     {
-        Console.WriteLine($"工具 {permission.Call.Name} 请求审批");
+        Console.WriteLine($"Tool {permission.Call.Name} requests approval");
         Console.WriteLine($"callId: {permission.Call.Id}");
         Console.WriteLine($"inputPreview: {JsonSerializer.Serialize(permission.Call.InputPreview)}");
-        
-        // 交互式审批
-        Console.Write("是否批准? (y/n): ");
+
+        // Interactive approval
+        Console.Write("Approve? (y/n): ");
         var input = Console.ReadLine();
-        
+
         if (input?.ToLower() == "y")
         {
             await agent.ApproveToolCallAsync(permission.Call.Id);
         }
         else
         {
-            await agent.DenyToolCallAsync(permission.Call.Id, "用户拒绝执行");
+            await agent.DenyToolCallAsync(permission.Call.Id, "User denied execution");
         }
     }
 }
 ```
 
-### 工具属性
+### Tool Attributes
 
-每个工具可以声明自己的权限属性：
+Each tool can declare its own permission attributes:
 
 ```csharp
 public record ToolAttributes
 {
     /// <summary>
-    /// 工具是否为只读（不修改状态）
+    /// Whether the tool is read-only (doesn't modify state)
     /// </summary>
     public bool ReadOnly { get; init; }
 
     /// <summary>
-    /// 工具是否无副作用
+    /// Whether the tool has no side effects
     /// </summary>
     public bool NoEffect { get; init; }
 
     /// <summary>
-    /// 是否需要用户审批
+    /// Whether user approval is required
     /// </summary>
     public bool RequiresApproval { get; init; }
 
     /// <summary>
-    /// 是否可以并行执行
+    /// Whether the tool can be executed in parallel
     /// </summary>
     public bool AllowParallel { get; init; }
 
     /// <summary>
-    /// 权限分类（用于自定义权限策略）
+    /// Permission category (for custom permission policies)
     /// </summary>
     public string? PermissionCategory { get; init; }
 }
@@ -1767,11 +1750,11 @@ public record ToolAttributes
 
 ---
 
-## 状态存储
+## State Storage
 
-SDK 提供多种状态存储实现，支持本地开发和分布式部署。
+SDK provides multiple state storage implementations supporting local development and distributed deployment.
 
-### 存储架构
+### Storage Architecture
 
 ```mermaid
 graph TB
@@ -1779,30 +1762,30 @@ graph TB
         AgentCore[Agent Core]
         State[Runtime State]
     end
-    
-    subgraph Store["IAgentStore 接口"]
-        Messages[(Messages<br/>对话历史)]
-        ToolCalls[(ToolCallRecords<br/>工具调用记录)]
-        Todos[(Todos<br/>任务列表)]
-        Events[(Events<br/>事件流)]
+
+    subgraph Store["IAgentStore Interface"]
+        Messages[(Messages<br/>Conversation history)]
+        ToolCalls[(ToolCallRecords<br/>Tool call records)]
+        Todos[(Todos<br/>Task list)]
+        Events[(Events<br/>Event stream)]
     end
-    
-    subgraph Implementations["存储实现"]
+
+    subgraph Implementations["Storage Implementations"]
         subgraph JSON["JsonAgentStore"]
-            JFiles[📁 本地文件系统<br/>.kode/agent-id/]
+            JFiles[📁 Local filesystem<br/>.kode/agent-id/]
         end
-        
+
         subgraph Redis["RedisAgentStore"]
             RKeys[🔑 Redis Keys<br/>kode:agent:id:*]
         end
     end
-    
+
     AgentCore --> State
     State --> Messages
     State --> ToolCalls
     State --> Todos
     State --> Events
-    
+
     Messages --> JSON
     Messages --> Redis
     ToolCalls --> JSON
@@ -1811,83 +1794,83 @@ graph TB
     Todos --> Redis
     Events --> JSON
     Events --> Redis
-    
+
     style JSON fill:#fff3e0
     style Redis fill:#ffebee
 ```
 
-### 断点续传流程
+### Checkpoint Recovery Flow
 
 ```mermaid
 sequenceDiagram
-    participant App as 应用程序
+    participant App as Application
     participant Agent
     participant Store as AgentStore
-    
-    Note over App,Store: 场景1: 正常保存
+
+    Note over App,Store: Scenario 1: Normal save
     Agent->>Store: SaveMessagesAsync()
     Agent->>Store: SaveToolCallRecordsAsync()
     Agent->>Store: SaveTodosAsync()
-    Store-->>Agent: ✅ 保存成功
-    
-    Note over App,Store: 场景2: 崩溃恢复
+    Store-->>Agent: ✅ Save successful
+
+    Note over App,Store: Scenario 2: Crash recovery
     App->>Store: ExistsAsync(agentId)
     Store-->>App: true
     App->>Agent: LoadAsync(agentId)
     Agent->>Store: LoadMessagesAsync()
-    Store-->>Agent: 消息历史
+    Store-->>Agent: Message history
     Agent->>Store: LoadToolCallRecordsAsync()
-    Store-->>Agent: 工具调用记录
+    Store-->>Agent: Tool call records
     Agent->>Store: LoadTodosAsync()
-    Store-->>Agent: Todo 快照
+    Store-->>Agent: Todo snapshot
     Agent-->>App: Agent (BreakpointState)
-    
+
     App->>Agent: ResumeAsync()
-    Agent->>Agent: 从断点继续执行
+    Agent->>Agent: Continue from breakpoint
 ```
 
-### JSON 文件存储
+### JSON File Storage
 
-适用于本地开发和单机部署：
+Suitable for local development and single machine deployment:
 
 ```csharp
 using Kode.Agent.Store.Json;
 
-// 创建存储
+// Create storage
 var store = new JsonAgentStore("./.kode");
 
-// 或使用依赖注入
+// Or use dependency injection
 services.AddJsonAgentStore(options =>
 {
     options.BaseDirectory = "./.kode";
-    options.PrettyPrint = true;  // 开发时启用格式化
+    options.PrettyPrint = true;  // Enable formatting for development
 });
 ```
 
-存储目录结构：
+Storage directory structure:
 ```
 .kode/
 ├── agent-id-1/
-│   ├── messages.json      # 对话历史
-│   ├── tool-calls.json    # 工具调用记录
-│   ├── todos.json         # Todo 列表
-│   └── events/            # 事件日志
+│   ├── messages.json      # Conversation history
+│   ├── tool-calls.json    # Tool call records
+│   ├── todos.json         # Todo list
+│   └── events/            # Event logs
 └── agent-id-2/
     └── ...
 ```
 
-### Redis 分布式存储
+### Redis Distributed Storage
 
-适用于生产环境和分布式部署：
+Suitable for production environments and distributed deployment:
 
 ```csharp
 using Kode.Agent.Store.Redis;
 using StackExchange.Redis;
 
-// 创建连接
+// Create connection
 var redis = ConnectionMultiplexer.Connect("localhost:6379");
 
-// 创建存储
+// Create storage
 var store = new RedisAgentStore(redis, new RedisStoreOptions
 {
     KeyPrefix = "kode:agent",
@@ -1895,7 +1878,7 @@ var store = new RedisAgentStore(redis, new RedisStoreOptions
     Expiration = TimeSpan.FromDays(7)
 });
 
-// 或使用依赖注入
+// Or use dependency injection
 services.AddRedisAgentStore(options =>
 {
     options.ConnectionString = Configuration["Redis:ConnectionString"]!;
@@ -1904,24 +1887,24 @@ services.AddRedisAgentStore(options =>
 });
 ```
 
-### 存储接口
+### Storage Interface
 
 ```csharp
 public interface IAgentStore
 {
-    // 消息存储
+    // Message storage
     Task SaveMessagesAsync(string agentId, IReadOnlyList<Message> messages, CancellationToken ct = default);
     Task<IReadOnlyList<Message>> LoadMessagesAsync(string agentId, CancellationToken ct = default);
 
-    // 工具调用记录
+    // Tool call records
     Task SaveToolCallRecordsAsync(string agentId, IReadOnlyList<ToolCallRecord> records, CancellationToken ct = default);
     Task<IReadOnlyList<ToolCallRecord>> LoadToolCallRecordsAsync(string agentId, CancellationToken ct = default);
 
-    // Todo 存储
+    // Todo storage
     Task SaveTodosAsync(string agentId, TodoSnapshot snapshot, CancellationToken ct = default);
     Task<TodoSnapshot?> LoadTodosAsync(string agentId, CancellationToken ct = default);
 
-    // 事件存储
+    // Event storage
     Task AppendEventAsync(string agentId, Timeline timeline, CancellationToken ct = default);
     IAsyncEnumerable<Timeline> ReadEventsAsync(
         string agentId,
@@ -1929,25 +1912,25 @@ public interface IAgentStore
         Bookmark? since = null,
         CancellationToken ct = default);
 
-    // 快照（安全分叉点）
+    // Snapshots (safe fork points)
     Task SaveSnapshotAsync(string agentId, Snapshot snapshot, CancellationToken ct = default);
     Task<Snapshot?> LoadSnapshotAsync(string agentId, string snapshotId, CancellationToken ct = default);
     Task<IReadOnlyList<Snapshot>> ListSnapshotsAsync(string agentId, CancellationToken ct = default);
     Task DeleteSnapshotAsync(string agentId, string snapshotId, CancellationToken ct = default);
 
-    // Agent 管理
+    // Agent management
     Task<bool> ExistsAsync(string agentId, CancellationToken ct = default);
     Task DeleteAsync(string agentId, CancellationToken ct = default);
     Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default);
 }
 ```
 
-### 断点续传
+### Checkpoint Recovery
 
-Agent 支持崩溃恢复和断点续传：
+Agent supports crash recovery and checkpoint resumption:
 
 ```csharp
-// 创建或恢复 Agent
+// Create or resume Agent
 Agent agent;
 try
 {
@@ -1955,17 +1938,17 @@ try
     {
         Strategy = RecoveryStrategy.Crash
     });
-    Console.WriteLine($"恢复 Agent，当前断点: {agent.BreakpointState}");
+    Console.WriteLine($"Resumed Agent, current breakpoint: {agent.BreakpointState}");
 }
 catch
 {
     agent = await Agent.CreateAsync("my-agent", config, deps);
 }
 
-// 如果 Agent 之前在工具执行中崩溃，可以恢复
+// If Agent crashed during tool execution, can recover
 if (agent.BreakpointState == BreakpointState.ToolExecuting)
 {
-    Console.WriteLine("检测到未完成的工具执行，正在恢复...");
+    Console.WriteLine("Detected incomplete tool execution, recovering...");
     await agent.ResumeAsync();
 }
 ```
