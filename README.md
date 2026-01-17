@@ -194,8 +194,6 @@ ANTHROPIC_MODEL_ID=claude-sonnet-4-20250514
 ANTHROPIC_BASE_URL=https://api.anthropic.com  # 可选，支持自定义端点
 ```
 
-**🎁 推荐优惠**：智谱 GLM Coding 超值订阅，支持 Claude Code、Cline 等 20+ 大编程工具！[立即开拼，享限时惊喜价！](https://www.bigmodel.cn/glm-coding?ic=HFFPJWPZQN)
-
 可选配置其他提供者：
 
 ```dotenv
@@ -699,6 +697,12 @@ dotnet run
 ### WebAPI 示例（OpenAI 兼容）
 
 这是一个 ASP.NET WebAPI 应用，对外暴露 **OpenAI Chat Completions 兼容接口**，支持 SSE 流式输出。
+
+**🎁 推荐优惠**：智谱 GLM Coding 超值订阅，支持 Claude Code、Cline 等 20+ 大编程工具！
+
+![智谱 GLM Coding](assets/zhipu.png)
+
+[立即开拼，享限时惊喜价！](https://www.bigmodel.cn/glm-coding?ic=HFFPJWPZQN)
 
 #### 快速启动
 
