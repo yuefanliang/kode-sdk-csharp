@@ -1,5 +1,7 @@
 # Kode.Agent WebApi Assistant (OpenAI Compatible)
 
+> **中文版**: [查看中文 README](./README-zh.md)
+
 This example is an ASP.NET WebAPI application that exposes an OpenAI Chat Completions compatible interface with SSE streaming support.
 
 ## Architecture Overview
