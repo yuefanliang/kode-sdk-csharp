@@ -4,7 +4,9 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![NuGet](https://img.shields.io/badge/NuGet-coming%20soon-blue)](https://www.nuget.org/)
+[![NuGet](https://img.shields.io/nuget/v/Kode.Agent.Sdk?logo=nuget)](https://www.nuget.org/packages/Kode.Agent.Sdk)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Kode.Agent.Sdk)](https://www.nuget.org/packages/Kode.Agent.Sdk)
+[![Build](https://github.com/JinFanZheng/kode-sdk-csharp/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/JinFanZheng/kode-sdk-csharp/actions/workflows/build-and-test.yml)
 
 一个强大的 AI Agent 运行时 SDK，基于 .NET 10 构建，支持 Anthropic Claude 和 OpenAI GPT 模型，提供完整的工具调用、状态管理、事件流等能力。专为构建生产级 AI 应用而设计。
 

@@ -54,6 +54,7 @@ tests/.tmp/
 bin/
 obj/
 .idea/
+nupkgs/
 
 
 # appsettings.json

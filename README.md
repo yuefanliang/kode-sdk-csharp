@@ -4,7 +4,9 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![NuGet](https://img.shields.io/badge/NuGet-coming%20soon-blue)](https://www.nuget.org/)
+[![NuGet](https://img.shields.io/nuget/v/Kode.Agent.Sdk?logo=nuget)](https://www.nuget.org/packages/Kode.Agent.Sdk)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Kode.Agent.Sdk)](https://www.nuget.org/packages/Kode.Agent.Sdk)
+[![Build](https://github.com/JinFanZheng/kode-sdk-csharp/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/JinFanZheng/kode-sdk-csharp/actions/workflows/build-and-test.yml)
 
 A powerful AI Agent runtime SDK built on .NET 10, supporting Anthropic Claude and OpenAI GPT models, with comprehensive capabilities for tool calling, state management, event streaming, and more. Designed for building production-grade AI applications.
 

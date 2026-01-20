@@ -1,0 +1,107 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.1.0)'
+        required: true
+        type: string
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  CONFIGURATION: Release
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Build
+        run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
+      
+      - name: Run tests
+        run: dotnet test --configuration ${{ env.CONFIGURATION }} --no-build --verbosity normal
+      
+      - name: Pack NuGet packages
+        run: dotnet pack --configuration ${{ env.CONFIGURATION }} --no-build --output ./nupkgs
+      
+      - name: List packages
+        run: ls -lh ./nupkgs/
+      
+      - name: Publish to NuGet.org
+        run: |
+          echo "Publishing packages to NuGet.org..."
+          
+          # 按依赖顺序发布包
+          # 1. 首先发布 SourceGenerator (被 Sdk 引用)
+          echo "Publishing Kode.Agent.SourceGenerator..."
+          dotnet nuget push ./nupkgs/Kode.Agent.SourceGenerator.*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+          
+          # 等待包索引完成
+          echo "Waiting for SourceGenerator to be indexed..."
+          sleep 90
+          
+          # 2. 发布核心 Sdk
+          echo "Publishing Kode.Agent.Sdk..."
+          dotnet nuget push ./nupkgs/Kode.Agent.Sdk.*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+          
+          # 等待 Sdk 包索引完成
+          echo "Waiting for Sdk to be indexed..."
+          sleep 120
+          
+          # 3. 发布依赖 Sdk 的其他包
+          echo "Publishing remaining packages..."
+          for pkg in ./nupkgs/Kode.Agent.Tools.Builtin.*.nupkg \
+                     ./nupkgs/Kode.Agent.Store.Json.*.nupkg \
+                     ./nupkgs/Kode.Agent.Store.Redis.*.nupkg \
+                     ./nupkgs/Kode.Agent.Mcp.*.nupkg; do
+            if [ -f "$pkg" ]; then
+              echo "Publishing $(basename $pkg)..."
+              dotnet nuget push "$pkg" \
+                --api-key ${{ secrets.NUGET_API_KEY }} \
+                --source https://api.nuget.org/v3/index.json \
+                --skip-duplicate
+              sleep 10
+            fi
+          done
+          
+          echo "All packages published successfully!"
+      
+      - name: Upload packages as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./nupkgs/*.nupkg
+          retention-days: 30
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ./nupkgs/*.nupkg
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
