@@ -10,7 +10,7 @@ A powerful AI Agent runtime SDK built on .NET 10, supporting Anthropic Claude an
 
 ## Project Background
 
-Kode Agent SDK for .NET is the C# implementation of [Kode SDK](../README.md), providing feature parity with the TypeScript version:
+Kode Agent SDK for .NET is the C# implementation of [Kode SDK](https://github.com/shareAI-lab/kode-agent-sdk), providing feature parity with the TypeScript version:
 
 - **Event-Driven Architecture** - Three-channel event system (Progress, Control, Monitor) for separation of concerns
 - **Complete State Management** - Support for persistence, crash recovery, and resumable execution

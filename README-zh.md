@@ -10,7 +10,7 @@
 
 ## 🎯 项目背景
 
-Kode Agent SDK for .NET 是 [Kode SDK](../README.md) 的 C# 实现，与 TypeScript 版本功能对等，提供：
+Kode Agent SDK for .NET 是 [Kode SDK](https://github.com/shareAI-lab/kode-agent-sdk) 的 C# 实现，与 TypeScript 版本功能对等，提供：
 
 - **事件驱动架构** - 三通道事件系统（Progress、Control、Monitor）分离关注点
 - **完整状态管理** - 支持持久化、崩溃恢复、断点续传
