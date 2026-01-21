@@ -92,7 +92,47 @@ jobs:
             fi
           done
           
-          echo "All packages published successfully!"
+          echo "All packages published successfully to NuGet.org!"
+      
+      - name: Publish to GitHub Packages
+        run: |
+          echo "Publishing packages to GitHub Packages..."
+          
+          # 配置 GitHub Packages 源
+          dotnet nuget add source --username JinFanZheng --password ${{ secrets.GITHUB_TOKEN }} \
+            --store-password-in-clear-text --name github \
+            "https://nuget.pkg.github.com/JinFanZheng/index.json"
+          
+          # 按相同顺序发布到 GitHub Packages
+          echo "Publishing Kode.Agent.SourceGenerator to GitHub Packages..."
+          dotnet nuget push ./nupkgs/Kode.Agent.SourceGenerator.*.nupkg \
+            --source "github" \
+            --skip-duplicate
+          
+          sleep 30
+          
+          echo "Publishing Kode.Agent.Sdk to GitHub Packages..."
+          dotnet nuget push ./nupkgs/Kode.Agent.Sdk.*.nupkg \
+            --source "github" \
+            --skip-duplicate
+          
+          sleep 60
+          
+          echo "Publishing remaining packages to GitHub Packages..."
+          for pkg in ./nupkgs/Kode.Agent.Tools.Builtin.*.nupkg \
+                     ./nupkgs/Kode.Agent.Store.Json.*.nupkg \
+                     ./nupkgs/Kode.Agent.Store.Redis.*.nupkg \
+                     ./nupkgs/Kode.Agent.Mcp.*.nupkg; do
+            if [ -f "$pkg" ]; then
+              echo "Publishing $(basename $pkg) to GitHub Packages..."
+              dotnet nuget push "$pkg" \
+                --source "github" \
+                --skip-duplicate
+              sleep 5
+            fi
+          done
+          
+          echo "All packages published successfully to GitHub Packages!"
       
       - name: Upload packages as artifacts
         uses: actions/upload-artifact@v4

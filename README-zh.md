@@ -166,8 +166,10 @@ sequenceDiagram
 
 ### 1. 安装包
 
+**从 NuGet.org 安装（推荐）**：
+
 ```bash
-# 使用 NuGet (即将发布)
+# 核心包
 dotnet add package Kode.Agent.Sdk
 dotnet add package Kode.Agent.Store.Json
 dotnet add package Kode.Agent.Tools.Builtin
@@ -178,6 +180,23 @@ dotnet add package Kode.Agent.Mcp
 # 可选：Redis 存储
 dotnet add package Kode.Agent.Store.Redis
 ```
+
+**从 GitHub Packages 安装**：
+
+```bash
+# 配置 GitHub Packages 源（首次设置）
+dotnet nuget add source \
+  --username YOUR_GITHUB_USERNAME \
+  --password YOUR_GITHUB_TOKEN \
+  --store-password-in-clear-text \
+  --name github \
+  "https://nuget.pkg.github.com/JinFanZheng/index.json"
+
+# 安装包
+dotnet add package Kode.Agent.Sdk --source github
+```
+
+> **📚 GitHub Packages 详细配置**，参见 [GitHub Packages 使用指南](.github/GITHUB_PACKAGES_GUIDE.md)
 
 或者直接引用项目：
 

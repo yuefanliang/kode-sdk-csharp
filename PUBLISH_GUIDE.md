@@ -1,6 +1,8 @@
 # NuGet 发布指南
 
-本指南介绍如何将 Kode Agent SDK 发布到 NuGet.org。
+本指南介绍如何将 Kode Agent SDK 发布到 **NuGet.org** 和 **GitHub Packages**。
+
+> **💡 提示**: 项目会自动发布到两个平台，用户可以从任意平台安装。详见 [GitHub Packages 使用指南](.github/GITHUB_PACKAGES_GUIDE.md)。
 
 ## 📦 包列表
 
@@ -19,12 +21,18 @@
 
 #### 前置准备
 
-1. 在 [nuget.org](https://www.nuget.org/) 创建账号并生成 API Key
-2. 在 GitHub 仓库设置中添加 Secret：
-   - 进入 `Settings` → `Secrets and variables` → `Actions`
+1. **NuGet.org 配置**
+   - 在 [nuget.org](https://www.nuget.org/) 创建账号
+   - 生成 API Key（需要 `Push new packages` 权限）
+
+2. **GitHub Secrets 配置**
+   - 进入仓库 `Settings` → `Secrets and variables` → `Actions`
    - 点击 `New repository secret`
-   - 名称：`NUGET_API_KEY`
-   - 值：你的 NuGet.org API Key
+   - 添加 Secret：
+     - 名称：`NUGET_API_KEY`
+     - 值：你的 NuGet.org API Key
+
+> **📝 注意**: GitHub Packages 发布会自动使用 `GITHUB_TOKEN`，无需额外配置。
 
 #### 发布步骤
 
@@ -40,11 +48,12 @@ git push origin v0.1.0
 ```
 
 GitHub Actions 会自动：
-- 构建所有项目
-- 运行测试
-- 打包 NuGet 包
-- 按正确顺序发布到 NuGet.org
-- 创建 GitHub Release
+- ✅ 构建所有项目
+- ✅ 运行测试
+- ✅ 打包 NuGet 包
+- ✅ 按正确顺序发布到 **NuGet.org**
+- ✅ 按正确顺序发布到 **GitHub Packages**
+- ✅ 创建 GitHub Release（包含所有 .nupkg 文件）
 
 #### 查看发布进度
 

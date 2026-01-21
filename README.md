@@ -166,8 +166,10 @@ sequenceDiagram
 
 ### 1. Install Packages
 
+**From NuGet.org (Recommended)**:
+
 ```bash
-# Using NuGet (coming soon)
+# Core packages
 dotnet add package Kode.Agent.Sdk
 dotnet add package Kode.Agent.Store.Json
 dotnet add package Kode.Agent.Tools.Builtin
@@ -178,6 +180,23 @@ dotnet add package Kode.Agent.Mcp
 # Optional: Redis storage
 dotnet add package Kode.Agent.Store.Redis
 ```
+
+**From GitHub Packages**:
+
+```bash
+# Configure GitHub Packages source (one-time setup)
+dotnet nuget add source \
+  --username YOUR_GITHUB_USERNAME \
+  --password YOUR_GITHUB_TOKEN \
+  --store-password-in-clear-text \
+  --name github \
+  "https://nuget.pkg.github.com/JinFanZheng/index.json"
+
+# Install packages
+dotnet add package Kode.Agent.Sdk --source github
+```
+
+> **📚 For detailed GitHub Packages setup**, see [GitHub Packages Guide](.github/GITHUB_PACKAGES_GUIDE.md)
 
 Or reference projects directly:
 
