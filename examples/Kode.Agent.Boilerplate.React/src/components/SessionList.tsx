@@ -1,29 +1,39 @@
-import { Plus, MessageSquare, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useChat } from '@/contexts/ChatContext';
-import { cn } from '@/lib/utils';
+import { Plus, MessageSquare, Trash2, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useChat } from "@/contexts/ChatContext";
+import { cn } from "@/lib/utils";
 
 export function SessionList() {
-  const { sessions, currentSession, createSession, selectSession, deleteSession } = useChat();
+  const {
+    sessions,
+    currentSession,
+    createSession,
+    selectSession,
+    deleteSession,
+  } = useChat();
 
   const handleDelete = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
-    if (confirm('Are you sure you want to delete this chat?')) {
+    if (confirm("Are you sure you want to delete this chat?")) {
       deleteSession(sessionId);
     }
   };
 
   return (
-    <div className="flex h-full flex-col border-r bg-muted/40">
+    <div className="flex h-full flex-col border-r border-border bg-card">
       {/* Header */}
-      <div className="flex items-center justify-between border-b p-4">
-        <h2 className="text-lg font-semibold">Chats</h2>
+      <div className="flex items-center justify-between border-b border-border p-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold text-primary">Chats</h2>
+        </div>
         <Button
           variant="ghost"
           size="icon"
           onClick={createSession}
           title="New Chat"
+          className="hover:bg-accent"
         >
           <Plus className="h-5 w-5" />
         </Button>
@@ -43,14 +53,16 @@ export function SessionList() {
               <div
                 key={session.id}
                 className={cn(
-                  'group relative flex cursor-pointer items-center gap-3 rounded-lg p-3 transition-colors hover:bg-accent',
-                  currentSession?.id === session.id && 'bg-accent'
+                  "group relative flex cursor-pointer items-center gap-3 rounded-lg p-3 transition-colors hover:bg-accent",
+                  currentSession?.id === session.id && "bg-accent",
                 )}
                 onClick={() => selectSession(session.id)}
               >
-                <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
                 <div className="flex-1 overflow-hidden">
-                  <p className="truncate text-sm font-medium">{session.title}</p>
+                  <p className="truncate text-sm font-medium text-primary">
+                    {session.title}
+                  </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {session.messages.length} messages
                   </p>
@@ -58,7 +70,7 @@ export function SessionList() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100"
+                  className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-all duration-200"
                   onClick={(e) => handleDelete(e, session.id)}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -70,9 +82,9 @@ export function SessionList() {
       </ScrollArea>
 
       {/* Footer */}
-      <div className="border-t p-4">
+      <div className="border-t border-border p-4">
         <p className="text-xs text-muted-foreground">
-          Powered by Kode.Agent
+          Powered by FeatBit & Kode-SDK-C#
         </p>
       </div>
     </div>
