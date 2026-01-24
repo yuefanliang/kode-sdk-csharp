@@ -3,14 +3,17 @@ using Kode.Agent.WebApiAssistant;
 using Kode.Agent.WebApiAssistant.Extensions;
 using Kode.Agent.WebApiAssistant.OpenAI;
 using Kode.Agent.WebApiAssistant.Services;
+using Kode.Agent.WebApiAssistant.Services.Persistence;
 using Kode.Agent.Sdk.Core.Abstractions;
 using Kode.Agent.Sdk.Core.Types;
 using Kode.Agent.Sdk.Infrastructure.Sandbox;
 using Kode.Agent.Sdk.Tools;
 using Kode.Agent.Store.Json;
 using Kode.Agent.Tools.Builtin;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
+using Swashbuckle.AspNetCore.SwaggerUI;
 
 EnvLoader.Load();
 
@@ -41,14 +44,14 @@ try
     // 添加控制器支持
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
-    // builder.Services.AddSwaggerGen();
+    builder.Services.AddSwaggerGen();
 
     builder.Services.AddSingleton(_ =>
         AssistantOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath));
     builder.Services.AddSingleton<IAgentStore>(sp =>
     {
         var options = sp.GetRequiredService<AssistantOptions>();
-        return new JsonAgentStore(options.StoreDir);
+        return new JsonAgentStore(options.StoreDir, sp.GetRequiredService<ILogger<JsonAgentStore>>());
     });
     builder.Services.AddSingleton<IToolRegistry>(sp =>
     {
@@ -99,9 +102,21 @@ try
 
     var app = builder.Build();
 
+    // 初始化数据库
+    using (var scope = app.Services.CreateScope())
+    {
+        var persistenceService = scope.ServiceProvider.GetRequiredService<IPersistenceService>();
+        await persistenceService.InitializeAsync();
+        Log.Information("Database initialized successfully");
+    }
+
     // 启用 Swagger
-    // app.UseSwagger();
-    // app.UseSwaggerUI();
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Kode.Agent API v1");
+        c.RoutePrefix = string.Empty;
+    });
 
     // 映射控制器路由
     app.MapControllers();
@@ -115,7 +130,8 @@ try
         {
             "POST /v1/chat/completions",
             "POST /{sessionId}/v1/chat/completions",
-            "GET  /healthz"
+            "GET  /healthz",
+            "GET  /swagger"
         },
         headers = new
         {

@@ -34,4 +34,9 @@ public interface ISessionService
     /// 获取或创建用户会话
     /// </summary>
     Task<Models.Entities.Session> GetOrCreateSessionAsync(string userId, string? sessionId = null);
+
+    /// <summary>
+    /// 增加会话消息计数
+    /// </summary>
+    Task IncrementMessageCountAsync(string sessionId);
 }

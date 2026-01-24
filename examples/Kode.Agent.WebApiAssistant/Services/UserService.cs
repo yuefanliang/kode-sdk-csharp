@@ -1,7 +1,10 @@
 using Kode.Agent.Sdk.Core.Abstractions;
 using Kode.Agent.WebApiAssistant.Models.Entities;
+using Kode.Agent.WebApiAssistant.Services.Persistence;
+using Kode.Agent.WebApiAssistant.Services.Persistence.Entities;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace Kode.Agent.WebApiAssistant.Services;
 
@@ -13,28 +16,42 @@ public class UserService : IUserService
     private readonly IAgentStore _store;
     private readonly ILogger<UserService> _logger;
     private readonly ConcurrentDictionary<string, User> _cache = new();
+    private readonly IPersistenceService _persistenceService;
 
-    public UserService(IAgentStore store, ILogger<UserService> logger)
+    public UserService(
+        IAgentStore store,
+        ILogger<UserService> logger,
+        IPersistenceService persistenceService)
     {
         _store = store;
         _logger = logger;
+        _persistenceService = persistenceService;
     }
 
-    public Task<User?> GetUserAsync(string userId)
+    public async Task<User?> GetUserAsync(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId))
         {
-            return Task.FromResult<User?>(null);
+            return null;
         }
 
         // 先从缓存获取
         if (_cache.TryGetValue(userId, out var cachedUser))
         {
-            return Task.FromResult<User?>(cachedUser);
+            return cachedUser;
         }
 
-        // TODO: 从持久化存储加载
-        return Task.FromResult<User?>(null);
+        // 从持久化存储加载
+        var userEntity = await _persistenceService.GetUserAsync(userId);
+        if (userEntity != null)
+        {
+            var user = MapToUser(userEntity);
+            _cache[userId] = user;
+            _logger.LogInformation("Loaded user from persistence: {UserId}", userId);
+            return user;
+        }
+
+        return null;
     }
 
     public async Task<User> GetOrCreateUserAsync(string userId)
@@ -45,6 +62,10 @@ public class UserService : IUserService
             // 更新最后活跃时间
             user.LastActiveAt = DateTime.UtcNow;
             _cache[userId] = user;
+
+            // 持久化更新
+            var userEntity = MapToUserEntity(user);
+            await _persistenceService.UpsertUserAsync(userEntity);
             return user;
         }
 
@@ -60,6 +81,10 @@ public class UserService : IUserService
 
         _cache[userId] = user;
         _logger.LogInformation("Created new user: {UserId}", userId);
+
+        // 持久化保存
+        var persistEntity = MapToUserEntity(user);
+        await _persistenceService.UpsertUserAsync(persistEntity);
 
         return user;
     }
@@ -89,5 +114,35 @@ public class UserService : IUserService
         }
 
         return agentId;
+    }
+
+    /// <summary>
+    /// 映射 UserEntity 到 User
+    /// </summary>
+    private static User MapToUser(UserEntity entity)
+    {
+        return new User
+        {
+            UserId = entity.UserId,
+            DisplayName = entity.DisplayName,
+            AgentId = entity.AgentId,
+            CreatedAt = entity.CreatedAt,
+            LastActiveAt = entity.LastActiveAt
+        };
+    }
+
+    /// <summary>
+    /// 映射 User 到 UserEntity
+    /// </summary>
+    private static UserEntity MapToUserEntity(User user)
+    {
+        return new UserEntity
+        {
+            UserId = user.UserId,
+            DisplayName = user.DisplayName,
+            AgentId = user.AgentId,
+            CreatedAt = user.CreatedAt,
+            LastActiveAt = user.LastActiveAt
+        };
     }
 }

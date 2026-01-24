@@ -3,6 +3,7 @@ using AgentImpl = Kode.Agent.Sdk.Core.Agent.Agent;
 using Kode.Agent.Sdk.Core.Types;
 using Kode.Agent.WebApiAssistant;
 using Kode.Agent.WebApiAssistant.Assistant;
+using Kode.Agent.Sdk.Core.Abstractions;
 
 namespace Kode.Agent.WebApiAssistant.Services;
 
@@ -87,6 +88,29 @@ public sealed class AssistantAgentPool
     public IReadOnlyList<string> ListAgentIds()
     {
         return _agents.Keys.ToArray();
+    }
+
+    public bool TryGetStatus(
+        string agentId,
+        out AgentRuntimeState runtimeState,
+        out BreakpointState breakpointState,
+        out DateTime lastAccessUtc,
+        out int activeLeases)
+    {
+        if (_agents.TryGetValue(agentId, out var entry))
+        {
+            runtimeState = entry.Agent.RuntimeState;
+            breakpointState = entry.Agent.BreakpointState;
+            lastAccessUtc = entry.LastAccessUtc;
+            activeLeases = entry.ActiveLeases;
+            return true;
+        }
+
+        runtimeState = AgentRuntimeState.Ready;
+        breakpointState = BreakpointState.Ready;
+        lastAccessUtc = DateTime.MinValue;
+        activeLeases = 0;
+        return false;
     }
 
     public async Task<Lease> LeaseAsync(

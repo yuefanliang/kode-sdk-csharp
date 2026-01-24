@@ -111,22 +111,6 @@ public sealed class AssistantService
         // Case 1: Explicit session ID provided
         if (explicitAgentId != null)
         {
-            // Check if session exists in store
-            var sessionExists = await _globalDeps.Store.ExistsAsync(explicitAgentId, cancellationToken);
-            if (!sessionExists)
-            {
-                httpContext.Response.StatusCode = (int)HttpStatusCode.NotFound;
-                await httpContext.Response.WriteAsJsonAsync(new
-                {
-                    error = new
-                    {
-                        message = "Session not found",
-                        type = "not_found_error"
-                    }
-                }, JsonOptions, cancellationToken);
-                return new GetOwnedAgentResult { ResponseWritten = true };
-            }
-
             var lease = await _agentPool.LeaseAsync(explicitAgentId, opts, cancellationToken);
             SetSessionIdHeaders(httpContext, explicitAgentId);
             return new GetOwnedAgentResult { Lease = lease, AgentId = explicitAgentId };
@@ -424,6 +408,32 @@ public sealed class AssistantService
                         });
                         break;
 
+                    case ToolStartEvent toolStart:
+                        await WriteSseEventAsync(httpContext, "tool", new
+                        {
+                            toolName = toolStart.Call.Name,
+                            callId = toolStart.Call.Id
+                        });
+                        break;
+
+                    case ToolEndEvent toolEnd:
+                        await WriteSseEventAsync(httpContext, "tool_result", new
+                        {
+                            callId = toolEnd.Call.Id,
+                            isError = false,
+                            result = toolEnd.Call.Result
+                        });
+                        break;
+
+                    case ToolErrorEvent toolError:
+                        await WriteSseEventAsync(httpContext, "tool_result", new
+                        {
+                            callId = toolError.Call.Id,
+                            isError = true,
+                            error = toolError.Error
+                        });
+                        break;
+
                     case DoneEvent done:
                         await WriteSseAsync(httpContext, new OpenAiChatCompletionChunk
                         {
@@ -463,6 +473,14 @@ public sealed class AssistantService
     private static async Task WriteSseAsync(HttpContext httpContext, object payload)
     {
         var json = JsonSerializer.Serialize(payload, JsonOptions);
+        await httpContext.Response.WriteAsync($"data: {json}\n\n");
+        await httpContext.Response.Body.FlushAsync();
+    }
+
+    private static async Task WriteSseEventAsync(HttpContext httpContext, string eventName, object payload)
+    {
+        var json = JsonSerializer.Serialize(payload, JsonOptions);
+        await httpContext.Response.WriteAsync($"event: {eventName}\n");
         await httpContext.Response.WriteAsync($"data: {json}\n\n");
         await httpContext.Response.Body.FlushAsync();
     }

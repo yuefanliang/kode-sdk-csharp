@@ -1,0 +1,9 @@
+@echo off
+echo Starting Kode Agent Vue Web...
+echo.
+echo Installing dependencies...
+call npm install
+echo.
+echo Starting development server...
+call npm run dev
+pause

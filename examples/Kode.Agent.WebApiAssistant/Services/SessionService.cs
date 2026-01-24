@@ -1,5 +1,7 @@
 using Kode.Agent.Sdk.Core.Abstractions;
 using Kode.Agent.WebApiAssistant.Models.Entities;
+using Kode.Agent.WebApiAssistant.Services.Persistence;
+using Kode.Agent.WebApiAssistant.Services.Persistence.Entities;
 using System.Collections.Concurrent;
 
 namespace Kode.Agent.WebApiAssistant.Services;
@@ -12,15 +14,31 @@ public class SessionService : ISessionService
     private readonly IAgentStore _store;
     private readonly ILogger<SessionService> _logger;
     private readonly ConcurrentDictionary<string, Session> _cache = new();
+    private readonly IPersistenceService _persistenceService;
+    private readonly IUserService _userService;
 
-    public SessionService(IAgentStore store, ILogger<SessionService> logger)
+    public SessionService(
+        IAgentStore store,
+        ILogger<SessionService> logger,
+        IPersistenceService persistenceService,
+        IUserService userService)
     {
         _store = store;
         _logger = logger;
+        _persistenceService = persistenceService;
+        _userService = userService;
     }
 
-    public Task<Session> CreateSessionAsync(string userId, string? title = null)
+    public async Task<Session> CreateSessionAsync(string userId, string? title = null)
     {
+        // 验证用户是否存在
+        var user = await _userService.GetUserAsync(userId);
+        if (user == null)
+        {
+            _logger.LogWarning("User not found when creating session: {UserId}", userId);
+            throw new ArgumentException($"User not found: {userId}", nameof(userId));
+        }
+
         var sessionId = Guid.NewGuid().ToString("N");
         var agentId = $"session_{sessionId}";
 
@@ -36,62 +54,94 @@ public class SessionService : ISessionService
         };
 
         _cache[sessionId] = session;
+
+        // 持久化保存
+        var sessionEntity = MapToSessionEntity(session);
+        await _persistenceService.CreateSessionAsync(sessionEntity);
+
         _logger.LogInformation("Created new session: {SessionId} for user: {UserId}", sessionId, userId);
 
-        return Task.FromResult(session);
+        return session;
     }
 
-    public Task<Session?> GetSessionAsync(string sessionId)
+    public async Task<Session?> GetSessionAsync(string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            return Task.FromResult<Session?>(null);
+            return null;
         }
 
-        _cache.TryGetValue(sessionId, out var session);
-        return Task.FromResult<Session?>(session);
+        // 从缓存获取
+        if (_cache.TryGetValue(sessionId, out var cachedSession))
+        {
+            return cachedSession;
+        }
+
+        // 从持久化存储加载
+        var sessionEntity = await _persistenceService.GetSessionAsync(sessionId);
+        if (sessionEntity != null)
+        {
+            var session = MapToSession(sessionEntity);
+            _cache[sessionId] = session;
+            return session;
+        }
+
+        return null;
     }
 
-    public Task<IReadOnlyList<Session>> ListSessionsAsync(string userId)
+    public async Task<IReadOnlyList<Session>> ListSessionsAsync(string userId)
     {
-        var sessions = _cache.Values
-            .Where(s => s.UserId == userId)
+        // 从持久化存储加载
+        var sessionEntities = await _persistenceService.ListSessionsAsync(userId);
+        var sessions = sessionEntities
+            .Select(MapToSession)
             .OrderByDescending(s => s.UpdatedAt)
             .ToList();
 
-        return Task.FromResult<IReadOnlyList<Session>>(sessions);
+        // 更新缓存
+        foreach (var session in sessions)
+        {
+            _cache[session.SessionId] = session;
+        }
+
+        return sessions;
     }
 
-    public Task DeleteSessionAsync(string sessionId)
+    public async Task DeleteSessionAsync(string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        if (_cache.TryRemove(sessionId, out var session))
+        // 从持久化存储删除
+        await _persistenceService.DeleteSessionAsync(sessionId);
+
+        // 从缓存移除
+        if (_cache.TryRemove(sessionId, out _))
         {
             _logger.LogInformation("Deleted session: {SessionId}", sessionId);
         }
-
-        return Task.CompletedTask;
     }
 
-    public Task UpdateSessionTitleAsync(string sessionId, string title)
+    public async Task UpdateSessionTitleAsync(string sessionId, string title)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
         {
-            return Task.CompletedTask;
+            return;
         }
 
         if (_cache.TryGetValue(sessionId, out var session))
         {
             session.Title = title;
             session.UpdatedAt = DateTime.UtcNow;
+
+            // 持久化更新
+            var sessionEntity = MapToSessionEntity(session);
+            await _persistenceService.UpdateSessionAsync(sessionEntity);
+
             _logger.LogInformation("Updated session title: {SessionId}", sessionId);
         }
-
-        return Task.CompletedTask;
     }
 
     public async Task<Session> GetOrCreateSessionAsync(string userId, string? sessionId = null)
@@ -123,12 +173,49 @@ public class SessionService : ISessionService
     /// <summary>
     /// 增加会话消息计数
     /// </summary>
-    public void IncrementMessageCount(string sessionId)
+    public async Task IncrementMessageCountAsync(string sessionId)
     {
         if (_cache.TryGetValue(sessionId, out var session))
         {
             session.MessageCount++;
             session.UpdatedAt = DateTime.UtcNow;
+
+            // 持久化更新
+            await _persistenceService.IncrementSessionMessageCountAsync(sessionId);
         }
+    }
+
+    /// <summary>
+    /// 映射 SessionEntity 到 Session
+    /// </summary>
+    private static Session MapToSession(SessionEntity entity)
+    {
+        return new Session
+        {
+            SessionId = entity.SessionId,
+            UserId = entity.UserId,
+            Title = entity.Title,
+            AgentId = entity.AgentId,
+            CreatedAt = entity.CreatedAt,
+            UpdatedAt = entity.UpdatedAt,
+            MessageCount = entity.MessageCount
+        };
+    }
+
+    /// <summary>
+    /// 映射 Session 到 SessionEntity
+    /// </summary>
+    private static SessionEntity MapToSessionEntity(Session session)
+    {
+        return new SessionEntity
+        {
+            SessionId = session.SessionId,
+            UserId = session.UserId,
+            Title = session.Title,
+            AgentId = session.AgentId,
+            CreatedAt = session.CreatedAt,
+            UpdatedAt = session.UpdatedAt,
+            MessageCount = session.MessageCount
+        };
     }
 }

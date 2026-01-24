@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,6 +8,7 @@ using Kode.Agent.Sdk.Core.Events;
 using Kode.Agent.Sdk.Core.Skills;
 using Kode.Agent.Sdk.Core.Todo;
 using Kode.Agent.Sdk.Core.Types;
+using Microsoft.Extensions.Logging;
 
 namespace Kode.Agent.Store.Json;
 
@@ -15,13 +17,16 @@ namespace Kode.Agent.Store.Json;
 /// </summary>
 public sealed class JsonAgentStore : IAgentStore
 {
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileLocks = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _baseDir;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly JsonSerializerOptions _eventJsonOptions;
+    private readonly ILogger<JsonAgentStore>? _logger;
 
-    public JsonAgentStore(string baseDir)
+    public JsonAgentStore(string baseDir, ILogger<JsonAgentStore>? logger = null)
     {
         _baseDir = baseDir;
+        _logger = logger;
         _jsonOptions = new JsonSerializerOptions
         {
             WriteIndented = true,
@@ -171,28 +176,37 @@ public sealed class JsonAgentStore : IAgentStore
         const int maxRetries = 3;
         const int retryDelayMs = 50;
         
-        for (int attempt = 0; attempt < maxRetries; attempt++)
+        var fileLock = GetFileLock(path);
+        await fileLock.WaitAsync(cancellationToken);
+        try
         {
-            try
+            for (int attempt = 0; attempt < maxRetries; attempt++)
             {
-                using var stream = new FileStream(
-                    path,
-                    FileMode.Append,
-                    FileAccess.Write,
-                    FileShare.ReadWrite, // Allow concurrent reads
-                    bufferSize: 4096,
-                    useAsync: true);
-                
-                using var writer = new StreamWriter(stream, leaveOpen: false);
-                await writer.WriteLineAsync(line);
-                await writer.FlushAsync();
-                return; // Success
+                try
+                {
+                    using var stream = new FileStream(
+                        path,
+                        FileMode.Append,
+                        FileAccess.Write,
+                        FileShare.ReadWrite,
+                        bufferSize: 4096,
+                        useAsync: true);
+
+                    using var writer = new StreamWriter(stream, leaveOpen: false);
+                    await writer.WriteLineAsync(line);
+                    await writer.FlushAsync();
+                    return;
+                }
+                catch (IOException ex) when (attempt < maxRetries - 1)
+                {
+                    _logger?.LogWarning(ex, "AppendEventAsync retry {Attempt} for {Path}", attempt + 1, path);
+                    await Task.Delay(retryDelayMs * (attempt + 1), cancellationToken);
+                }
             }
-            catch (IOException) when (attempt < maxRetries - 1)
-            {
-                // Retry on file lock, with exponential backoff
-                await Task.Delay(retryDelayMs * (attempt + 1), cancellationToken);
-            }
+        }
+        finally
+        {
+            fileLock.Release();
         }
         
         // If all retries failed, throw the last exception
@@ -558,7 +572,32 @@ public sealed class JsonAgentStore : IAgentStore
     {
         EnsureDirectoryExists(path);
         var json = JsonSerializer.Serialize(value, _jsonOptions);
-        await File.WriteAllTextAsync(path, json, cancellationToken);
+        const int maxRetries = 3;
+        const int retryDelayMs = 50;
+        var fileLock = GetFileLock(path);
+        await fileLock.WaitAsync(cancellationToken);
+        try
+        {
+            for (int attempt = 0; attempt < maxRetries; attempt++)
+            {
+                try
+                {
+                    await File.WriteAllTextAsync(path, json, cancellationToken);
+                    return;
+                }
+                catch (IOException ex) when (attempt < maxRetries - 1)
+                {
+                    _logger?.LogWarning(ex, "WriteAsync retry {Attempt} for {Path}", attempt + 1, path);
+                    await Task.Delay(retryDelayMs * (attempt + 1), cancellationToken);
+                }
+            }
+        }
+        finally
+        {
+            fileLock.Release();
+        }
+
+        throw new IOException($"Failed to write {path} after {maxRetries} attempts");
     }
 
     private async Task WriteWithWalAsync<T>(string path, T value, CancellationToken cancellationToken)
@@ -568,16 +607,41 @@ public sealed class JsonAgentStore : IAgentStore
         var walPath = path + ".wal";
         var json = JsonSerializer.Serialize(value, _jsonOptions);
 
-        // Write to WAL first
-        await File.WriteAllTextAsync(walPath, json, cancellationToken);
-
-        // Then move to final location (atomic on most filesystems)
-        if (File.Exists(path))
+        const int maxRetries = 3;
+        const int retryDelayMs = 50;
+        var fileLock = GetFileLock(path);
+        await fileLock.WaitAsync(cancellationToken);
+        try
         {
-            File.Delete(path);
+            for (int attempt = 0; attempt < maxRetries; attempt++)
+            {
+                try
+                {
+                    await File.WriteAllTextAsync(walPath, json, cancellationToken);
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                    File.Move(walPath, path);
+                    return;
+                }
+                catch (IOException ex) when (attempt < maxRetries - 1)
+                {
+                    _logger?.LogWarning(ex, "WriteWithWalAsync retry {Attempt} for {Path}", attempt + 1, path);
+                    await Task.Delay(retryDelayMs * (attempt + 1), cancellationToken);
+                }
+            }
         }
-        File.Move(walPath, path);
+        finally
+        {
+            fileLock.Release();
+        }
+
+        throw new IOException($"Failed to write WAL to {path} after {maxRetries} attempts");
     }
+
+    private static SemaphoreSlim GetFileLock(string path) =>
+        FileLocks.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
 
     #endregion
 }

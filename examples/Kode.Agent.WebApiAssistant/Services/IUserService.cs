@@ -19,4 +19,6 @@ public interface IUserService
     /// 获取用户的 Agent ID
     /// </summary>
     Task<string> GetAgentIdAsync(string userId);
+
+
 }

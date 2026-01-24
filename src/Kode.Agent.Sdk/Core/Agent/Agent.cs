@@ -1855,10 +1855,12 @@ public sealed class Agent : IAgent, ISkillsAwareAgent, ITaskDelegatorAgent, ISub
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                _logger?.LogWarning("Tool call timed out or cancelled: {ToolName} ({CallId})", toolUse.Name, toolUse.Id);
                 toolResult = ToolResult.Fail("Tool timed out or cancelled");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                _logger?.LogError(ex, "Tool call failed: {ToolName} ({CallId})", toolUse.Name, toolUse.Id);
                 toolResult = ToolResult.Fail(ex.Message);
             }
             sw.Stop();

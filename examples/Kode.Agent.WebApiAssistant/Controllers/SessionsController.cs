@@ -14,15 +14,18 @@ public class SessionsController : ControllerBase
 {
     private readonly ISessionService _sessionService;
     private readonly IUserService _userService;
+    private readonly AssistantAgentPool _agentPool;
     private readonly ILogger<SessionsController> _logger;
 
     public SessionsController(
         ISessionService sessionService,
         IUserService userService,
+        AssistantAgentPool agentPool,
         ILogger<SessionsController> logger)
     {
         _sessionService = sessionService;
         _userService = userService;
+        _agentPool = agentPool;
         _logger = logger;
     }
 
@@ -66,6 +69,49 @@ public class SessionsController : ControllerBase
         }
 
         return Ok(SessionResponse.FromEntity(session));
+    }
+
+    [HttpGet("{sessionId}/status")]
+    public async Task<ActionResult> GetSessionStatus(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return BadRequest(new { error = "sessionId is required" });
+        }
+
+        var session = await _sessionService.GetSessionAsync(sessionId);
+        if (session == null)
+        {
+            return NotFound(new { error = "Session not found" });
+        }
+
+        if (_agentPool.TryGetStatus(
+                sessionId,
+                out var runtimeState,
+                out var breakpointState,
+                out var lastAccessUtc,
+                out var activeLeases))
+        {
+            return Ok(new
+            {
+                sessionId,
+                runtimeState = runtimeState.ToString(),
+                breakpointState = breakpointState.ToString(),
+                lastAccessUtc,
+                activeLeases,
+                inPool = true
+            });
+        }
+
+        return Ok(new
+        {
+            sessionId,
+            runtimeState = "Ready",
+            breakpointState = "Ready",
+            lastAccessUtc = (DateTime?)null,
+            activeLeases = 0,
+            inPool = false
+        });
     }
 
     /// <summary>
