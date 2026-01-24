@@ -5,6 +5,7 @@ using Kode.Agent.Sdk.Core.Abstractions;
 using AgentDependencies = Kode.Agent.Sdk.Core.Types.AgentDependencies;
 using Kode.Agent.WebApiAssistant.Assistant;
 using Kode.Agent.WebApiAssistant.OpenAI;
+using Kode.Agent.WebApiAssistant.Services;
 
 namespace Kode.Agent.WebApiAssistant;
 
@@ -32,8 +33,8 @@ public sealed record GetOwnedAgentOptions
 /// </summary>
 public sealed record GetOwnedAgentResult
 {
-    /// <summary>The agent instance (null if error occurred)</summary>
-    public AgentImpl? Agent { get; init; }
+    /// <summary>Lease that holds the agent instance and controls release/cleanup</summary>
+    public AssistantAgentPool.Lease? Lease { get; init; }
     /// <summary>The agent ID</summary>
     public string? AgentId { get; init; }
     /// <summary>Whether the response has already been written (error case)</summary>
@@ -51,15 +52,18 @@ public sealed class AssistantService
     private readonly AssistantOptions _options;
     private readonly IServiceProvider _serviceProvider;
     private readonly OpenAiRoutingStateManager _routingStateManager;
+    private readonly AssistantAgentPool _agentPool;
 
     public AssistantService(
         AgentDependencies globalDeps,
         AssistantOptions options,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        AssistantAgentPool agentPool)
     {
         _globalDeps = globalDeps;
         _options = options;
         _serviceProvider = serviceProvider;
+        _agentPool = agentPool;
         _routingStateManager = new OpenAiRoutingStateManager(
             options.WorkDir,
             serviceProvider.GetService<ILogger<OpenAiRoutingStateManager>>());
@@ -123,9 +127,9 @@ public sealed class AssistantService
                 return new GetOwnedAgentResult { ResponseWritten = true };
             }
 
-            var agent = await CreateOrResumeAgentAsync(explicitAgentId, opts, cancellationToken);
+            var lease = await _agentPool.LeaseAsync(explicitAgentId, opts, cancellationToken);
             SetSessionIdHeaders(httpContext, explicitAgentId);
-            return new GetOwnedAgentResult { Agent = agent, AgentId = explicitAgentId };
+            return new GetOwnedAgentResult { Lease = lease, AgentId = explicitAgentId };
         }
 
         // Case 2: Thread key provided (OpenAI user field)
@@ -137,14 +141,14 @@ public sealed class AssistantService
 
             if (mappedId != null && await _globalDeps.Store.ExistsAsync(mappedId, cancellationToken))
             {
-                var agent = await CreateOrResumeAgentAsync(mappedId, opts, cancellationToken);
+                var lease = await _agentPool.LeaseAsync(mappedId, opts, cancellationToken);
                 SetSessionIdHeaders(httpContext, mappedId);
-                return new GetOwnedAgentResult { Agent = agent, AgentId = mappedId };
+                return new GetOwnedAgentResult { Lease = lease, AgentId = mappedId };
             }
 
             // First time seeing this threadKey: create new session and bind it
             var newAgentId = AssistantBuilder.GenerateAgentId();
-            var newAgent = await CreateOrResumeAgentAsync(newAgentId, opts, cancellationToken);
+            var newLease = await _agentPool.LeaseAsync(newAgentId, opts, cancellationToken);
 
             var nextState = state with
             {
@@ -155,7 +159,7 @@ public sealed class AssistantService
             };
             _routingStateManager.SaveRoutingState(userId, nextState);
             SetSessionIdHeaders(httpContext, newAgentId);
-            return new GetOwnedAgentResult { Agent = newAgent, AgentId = newAgentId };
+            return new GetOwnedAgentResult { Lease = newLease, AgentId = newAgentId };
         }
 
         // Case 3: Auto default session (no explicit session, no threadKey)
@@ -174,7 +178,7 @@ public sealed class AssistantService
 
             if (!shouldCreateNewAutoSession && autoDefault != null && await _globalDeps.Store.ExistsAsync(autoDefault, cancellationToken))
             {
-                var agent = await CreateOrResumeAgentAsync(autoDefault, opts, cancellationToken);
+                var lease = await _agentPool.LeaseAsync(autoDefault, opts, cancellationToken);
                 _routingStateManager.SaveRoutingState(userId, state with
                 {
                     AutoDefaultAgentId = autoDefault,
@@ -182,12 +186,12 @@ public sealed class AssistantService
                     AutoLastRequestAt = DateTimeOffset.UtcNow.ToString("O")
                 });
                 SetSessionIdHeaders(httpContext, autoDefault);
-                return new GetOwnedAgentResult { Agent = agent, AgentId = autoDefault };
+                return new GetOwnedAgentResult { Lease = lease, AgentId = autoDefault };
             }
 
             // Create new auto-default session
             var newAgentId = AssistantBuilder.GenerateAgentId();
-            var newAgent = await CreateOrResumeAgentAsync(newAgentId, opts, cancellationToken);
+            var newLease = await _agentPool.LeaseAsync(newAgentId, opts, cancellationToken);
             _routingStateManager.SaveRoutingState(userId, state with
             {
                 AutoDefaultAgentId = newAgentId,
@@ -195,37 +199,14 @@ public sealed class AssistantService
                 AutoLastRequestAt = DateTimeOffset.UtcNow.ToString("O")
             });
             SetSessionIdHeaders(httpContext, newAgentId);
-            return new GetOwnedAgentResult { Agent = newAgent, AgentId = newAgentId };
+            return new GetOwnedAgentResult { Lease = newLease, AgentId = newAgentId };
         }
     }
 
     /// <summary>
     /// Create or resume an agent with the given ID.
     /// </summary>
-    private async Task<AgentImpl> CreateOrResumeAgentAsync(
-        string agentId,
-        GetOwnedAgentOptions opts,
-        CancellationToken cancellationToken)
-    {
-        var createOptions = new CreateAssistantOptions
-        {
-            AgentId = agentId,
-            WorkDir = _options.WorkDir,
-            Model = _options.DefaultModel,
-            SystemPrompt = opts.SystemPrompt ?? _options.DefaultSystemPrompt,
-            Temperature = opts.Temperature,
-            MaxTokens = opts.MaxTokens,
-            Skills = _options.SkillsConfig,
-            Permissions = _options.PermissionConfig
-        };
-
-        return await AssistantBuilder.CreateAssistantAsync(
-            createOptions,
-            _globalDeps,
-            _serviceProvider,
-            _globalDeps.LoggerFactory!,
-            cancellationToken);
-    }
+    // Agent creation is handled by AssistantAgentPool (pooled or per-request).
 
     /// <summary>
     /// Set session ID response headers.
@@ -297,10 +278,11 @@ public sealed class AssistantService
             return;
         }
 
-        var agent = agentResult.Agent!;
+        var lease = agentResult.Lease!;
+        var agent = lease.Agent;
         var agentId = agentResult.AgentId!;
 
-        await using (agent)
+        await using (lease)
         {
             if (request.Stream)
             {

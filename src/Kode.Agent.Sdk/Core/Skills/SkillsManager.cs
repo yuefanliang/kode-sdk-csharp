@@ -28,8 +28,7 @@ public class SkillsManager
         _agentId = agentId;
         _logger = logger;
         _loader = new SkillsLoader(sandbox, logger != null ? 
-            Microsoft.Extensions.Logging.LoggerFactoryExtensions.CreateLogger<SkillsLoader>(
-                new LoggerFactory(new[] { new LoggerProvider(logger) })) : null);
+            new LoggerFactory([new LoggerProvider(logger)]).CreateLogger<SkillsLoader>() : null);
     }
 
     /// <summary>

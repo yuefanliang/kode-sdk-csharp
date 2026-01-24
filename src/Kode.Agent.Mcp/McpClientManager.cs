@@ -118,8 +118,23 @@ public sealed class McpClientManager : IAsyncDisposable
         if (_clients.TryRemove(serverName, out var client))
         {
             _logger?.LogDebug("Disconnecting from MCP server: {ServerName}", serverName);
-            await client.DisposeAsync();
-            _logger?.LogInformation("Disconnected from MCP server: {ServerName}", serverName);
+            try
+            {
+                await client.DisposeAsync();
+                _logger?.LogInformation("Disconnected from MCP server: {ServerName}", serverName);
+            }
+            catch (Exception ex) when (IsExpectedDisconnectError(ex))
+            {
+                // Common case during host shutdown:
+                // stdio-based MCP servers may receive SIGINT/SIGTERM and exit with code 130/143.
+                // Disposal should not crash the entire application in that case.
+                _logger?.LogDebug(ex, "MCP server already stopped during disconnect: {ServerName}", serverName);
+            }
+            catch (Exception ex)
+            {
+                // Best-effort: never fail shutdown because one MCP server exited unexpectedly.
+                _logger?.LogWarning(ex, "Failed to disconnect MCP server: {ServerName}", serverName);
+            }
         }
     }
 
@@ -159,5 +174,23 @@ public sealed class McpClientManager : IAsyncDisposable
         _disposed = true;
         
         await DisconnectAllAsync();
+    }
+
+    private static bool IsExpectedDisconnectError(Exception ex)
+    {
+        // OperationCanceledException: shutdown / cancellation path.
+        if (ex is OperationCanceledException) return true;
+
+        // ModelContextProtocol may wrap process termination as IOException with message containing exit code.
+        if (ex is IOException io)
+        {
+            var msg = io.Message ?? "";
+            return msg.Contains("exit code: 130", StringComparison.OrdinalIgnoreCase) ||
+                   msg.Contains("exit code: 143", StringComparison.OrdinalIgnoreCase) ||
+                   msg.Contains("broken pipe", StringComparison.OrdinalIgnoreCase) ||
+                   msg.Contains("EPIPE", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 }

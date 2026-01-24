@@ -160,6 +160,11 @@ public sealed class Agent : IAgent, ISkillsAwareAgent, ITaskDelegatorAgent, ISub
             throw new InvalidOperationException("AgentConfig.Model is required (can be provided via template merge)");
         }
 
+        // Persist initial meta so the session becomes resumable immediately.
+        // Without this, the store directory can exist (events/runtime files) but meta.json may be missing,
+        // and resume attempts will fail with "Agent metadata not found".
+        await agent.UpdateInfoAsync(cancellationToken);
+
         return agent;
     }
 
@@ -2080,6 +2085,27 @@ public sealed class Agent : IAgent, ISkillsAwareAgent, ITaskDelegatorAgent, ISub
             (watchFiles.ValueKind == System.Text.Json.JsonValueKind.True || watchFiles.ValueKind == System.Text.Json.JsonValueKind.False))
         {
             options = options with { WatchFiles = watchFiles.GetBoolean() };
+        }
+
+        if (sandbox.TryGetValue("useDocker", out var useDocker) &&
+            (useDocker.ValueKind == System.Text.Json.JsonValueKind.True || useDocker.ValueKind == System.Text.Json.JsonValueKind.False))
+        {
+            options = options with { UseDocker = useDocker.GetBoolean() };
+        }
+
+        if (sandbox.TryGetValue("dockerImage", out var dockerImage) && dockerImage.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            options = options with { DockerImage = dockerImage.GetString() };
+        }
+
+        if (sandbox.TryGetValue("dockerNetworkMode", out var dockerNetworkMode) && dockerNetworkMode.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            options = options with { DockerNetworkMode = dockerNetworkMode.GetString() };
+        }
+
+        if (sandbox.TryGetValue("sandboxStateDirectory", out var sandboxStateDirectory) && sandboxStateDirectory.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            options = options with { SandboxStateDirectory = sandboxStateDirectory.GetString() };
         }
 
         return options;

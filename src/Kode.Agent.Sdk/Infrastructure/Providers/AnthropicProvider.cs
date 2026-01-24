@@ -52,7 +52,7 @@ public sealed class AnthropicProvider : IModelProvider
         var toolNameMap = new Dictionary<long, string>();
         var toolInputBuilders = new Dictionary<long, System.Text.StringBuilder>();
 
-        await foreach (var evt in _client.Messages.CreateStreaming(parameters))
+        await foreach (var evt in _client.Messages.CreateStreaming(parameters, cancellationToken))
         {
             // Handle content block start
             if (evt.TryPickContentBlockStart(out var startEvent))
@@ -73,6 +73,7 @@ public sealed class AnthropicProvider : IModelProvider
                         }
                     };
                 }
+
                 continue;
             }
 
@@ -95,16 +96,20 @@ public sealed class AnthropicProvider : IModelProvider
                     }
 
                     var toolId = toolIdMap.GetValueOrDefault(deltaEvent.Index, deltaEvent.Index.ToString());
+                    var toolName = toolNameMap.GetValueOrDefault(deltaEvent.Index, "");
+
                     yield return new StreamChunk
                     {
                         Type = StreamChunkType.ToolUseInputDelta,
                         ToolUse = new ToolUseChunk
                         {
                             Id = toolId,
+                            Name = toolName,
                             InputDelta = jsonDelta.PartialJSON
                         }
                     };
                 }
+
                 continue;
             }
 
@@ -119,8 +124,14 @@ public sealed class AnthropicProvider : IModelProvider
                     object? input = null;
                     if (!string.IsNullOrEmpty(inputJson))
                     {
-                        try { input = JsonSerializer.Deserialize<object>(inputJson); }
-                        catch { /* ignore */ }
+                        try
+                        {
+                            input = JsonSerializer.Deserialize<object>(inputJson);
+                        }
+                        catch
+                        {
+                            /* ignore */
+                        }
                     }
 
                     var toolId = toolIdMap.GetValueOrDefault(stopEvent.Index, stopEvent.Index.ToString());
@@ -137,6 +148,7 @@ public sealed class AnthropicProvider : IModelProvider
                         }
                     };
                 }
+
                 continue;
             }
 
@@ -144,20 +156,18 @@ public sealed class AnthropicProvider : IModelProvider
             if (evt.TryPickDelta(out var messageDelta))
             {
                 var apiStopReason = messageDelta.Delta.StopReason;
-                var stopReason = apiStopReason != null 
-                    ? ConvertStopReason((AnthropicStopReason)apiStopReason) 
+                var stopReason = apiStopReason != null
+                    ? ConvertStopReason((AnthropicStopReason)apiStopReason)
                     : ModelStopReason.EndTurn;
                 yield return new StreamChunk
                 {
                     Type = StreamChunkType.MessageStop,
                     StopReason = stopReason,
-                    Usage = messageDelta.Usage != null
-                        ? new TokenUsage
-                        {
-                            InputTokens = (int)(messageDelta.Usage.InputTokens ?? 0),
-                            OutputTokens = (int)messageDelta.Usage.OutputTokens
-                        }
-                        : null
+                    Usage = new TokenUsage
+                    {
+                        InputTokens = (int)(messageDelta.Usage.InputTokens ?? 0),
+                        OutputTokens = (int)messageDelta.Usage.OutputTokens
+                    }
                 };
                 continue;
             }
@@ -173,7 +183,7 @@ public sealed class AnthropicProvider : IModelProvider
     public async Task<ModelResponse> CompleteAsync(ModelRequest request, CancellationToken cancellationToken = default)
     {
         var parameters = BuildMessageParameters(request);
-        var response = await _client.Messages.Create(parameters);
+        var response = await _client.Messages.Create(parameters, cancellationToken);
         return ConvertToModelResponse(response);
     }
 
@@ -253,10 +263,11 @@ public sealed class AnthropicProvider : IModelProvider
             }),
             ToolResultContent toolResult => new ContentBlockParam(new ToolResultBlockParam(toolResult.ToolUseId)
             {
-                Content = toolResult.Content?.ToString() ?? "",
+                Content = toolResult.Content.ToString() ?? "",
                 IsError = toolResult.IsError
             }),
-            ThinkingContent thinking => new ContentBlockParam(new TextBlockParam { Text = $"<thinking>{thinking.Thinking}</thinking>" }),
+            ThinkingContent thinking => new ContentBlockParam(new TextBlockParam
+                { Text = $"<thinking>{thinking.Thinking}</thinking>" }),
             _ => new ContentBlockParam(new TextBlockParam { Text = "" })
         };
     }
@@ -272,13 +283,14 @@ public sealed class AnthropicProvider : IModelProvider
         if (input is Dictionary<string, JsonElement> dict)
             return dict;
 
-        if (input is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Object)
+        if (input is JsonElement { ValueKind: JsonValueKind.Object } jsonElement)
         {
             var result = new Dictionary<string, JsonElement>();
             foreach (var prop in jsonElement.EnumerateObject())
             {
                 result[prop.Name] = prop.Value.Clone();
             }
+
             return result;
         }
 
@@ -292,6 +304,7 @@ public sealed class AnthropicProvider : IModelProvider
             {
                 result[prop.Name] = prop.Value.Clone();
             }
+
             return result;
         }
 
@@ -305,7 +318,8 @@ public sealed class AnthropicProvider : IModelProvider
             var properties = new Dictionary<string, JsonElement>();
             var required = new List<string>();
 
-            if (jsonElement.TryGetProperty("properties", out var propsElement) && propsElement.ValueKind == JsonValueKind.Object)
+            if (jsonElement.TryGetProperty("properties", out var propsElement) &&
+                propsElement.ValueKind == JsonValueKind.Object)
             {
                 foreach (var prop in propsElement.EnumerateObject())
                 {
@@ -313,11 +327,12 @@ public sealed class AnthropicProvider : IModelProvider
                 }
             }
 
-            if (jsonElement.TryGetProperty("required", out var reqElement) && reqElement.ValueKind == JsonValueKind.Array)
+            if (jsonElement.TryGetProperty("required", out var reqElement) &&
+                reqElement.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in reqElement.EnumerateArray())
                 {
-                    if (item.GetString() is string reqProp)
+                    if (item.GetString() is { } reqProp)
                     {
                         required.Add(reqProp);
                     }
@@ -353,11 +368,11 @@ public sealed class AnthropicProvider : IModelProvider
     {
         var content = new List<ContentBlock>();
 
-        foreach (var block in response.Content ?? [])
+        foreach (var block in response.Content)
         {
             if (block.TryPickText(out var textBlock))
             {
-                content.Add(new TextContent { Text = textBlock.Text ?? "" });
+                content.Add(new TextContent { Text = textBlock.Text });
             }
             else if (block.TryPickToolUse(out var toolUseBlock))
             {
@@ -365,14 +380,14 @@ public sealed class AnthropicProvider : IModelProvider
                 {
                     Id = toolUseBlock.ID,
                     Name = toolUseBlock.Name,
-                    Input = toolUseBlock.Input ?? new Dictionary<string, JsonElement>()
+                    Input = toolUseBlock.Input
                 });
             }
         }
 
         var apiStopReason = response.StopReason;
-        var stopReason = apiStopReason != null 
-            ? ConvertStopReason((AnthropicStopReason)apiStopReason) 
+        var stopReason = apiStopReason != null
+            ? ConvertStopReason((AnthropicStopReason)apiStopReason)
             : ModelStopReason.EndTurn;
 
         return new ModelResponse
@@ -381,8 +396,8 @@ public sealed class AnthropicProvider : IModelProvider
             StopReason = stopReason,
             Usage = new TokenUsage
             {
-                InputTokens = (int)(response.Usage?.InputTokens ?? 0),
-                OutputTokens = (int)(response.Usage?.OutputTokens ?? 0)
+                InputTokens = (int)response.Usage.InputTokens,
+                OutputTokens = (int)response.Usage.OutputTokens
             },
             Model = response.Model ?? ""
         };

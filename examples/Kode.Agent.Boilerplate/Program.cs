@@ -71,7 +71,7 @@ try
         return registry;
     });
 
-    builder.Services.AddSingleton<ISandboxFactory, LocalSandboxFactory>();
+    builder.Services.AddSingleton<ISandboxFactory, DefaultSandboxFactory>();
 
     builder.Services.AddSingleton<IModelProvider>(sp =>
     {

@@ -62,7 +62,7 @@ public static class ServiceCollectionExtensions
         registry.Register(new TodoReadTool());
         registry.Register(new TodoWriteTool());
         
-        // // 注册 Skills 相关工具
+        // Skills tools
         registry.Register(new SkillListTool());
         registry.Register(new SkillActivateTool());
         registry.Register(new SkillResourceTool());

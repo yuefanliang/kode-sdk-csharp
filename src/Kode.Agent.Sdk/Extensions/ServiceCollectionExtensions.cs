@@ -20,7 +20,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IToolRegistry, ToolRegistry>();
 
         // Sandbox factory
-        services.TryAddSingleton<ISandboxFactory, LocalSandboxFactory>();
+        services.TryAddSingleton<ISandboxFactory, DefaultSandboxFactory>();
 
         return services;
     }
@@ -38,7 +38,7 @@ public static class ServiceCollectionExtensions
         // Configure based on options
         if (options.WorkingDirectory != null)
         {
-            services.AddSingleton<ISandboxFactory>(_ => new LocalSandboxFactory());
+            services.AddSingleton<ISandboxFactory>(_ => new DefaultSandboxFactory());
         }
 
         return services;

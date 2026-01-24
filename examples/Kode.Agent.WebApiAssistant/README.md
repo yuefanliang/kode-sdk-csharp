@@ -133,6 +133,28 @@ dotnet run
 
 Default listening address is shown in console output (typically `http://localhost:5xxx`).
 
+## Docker Sandbox Image (Optional)
+
+If you enable `Kode:Sandbox:UseDocker=true`, using a custom image with common tools is recommended (instead of a bare
+`ubuntu:latest`), otherwise the container may miss utilities like `git`, `jq`, or `rg`.
+
+This repo includes a reusable sandbox image definition supporting `linux/amd64` and `linux/arm64`:
+
+- `docker/sandbox/Dockerfile`
+- `docker/sandbox/README.md` (includes multi-arch buildx examples)
+
+Build (recommended via the repo root `Makefile`):
+
+```bash
+# single-arch local build (current platform)
+make sandbox-build
+
+# multi-arch build + push (linux/amd64 + linux/arm64)
+make sandbox-push IMAGE=your-org/kode-agent-sandbox
+```
+
+After building/pushing, set `Kode:Sandbox:DockerImage` to your image tag (default tag is derived from repo `<Version>`).
+
 ## Endpoints
 
 - `POST /v1/chat/completions` (OpenAI compatible)
@@ -156,11 +178,18 @@ This service stores conversation state in JSON files under `KODE_STORE_DIR`.
 
 ### Data Directory Structure
 
+WebApiAssistant separates:
+
+- **Workspace directory**: used by `bash_run` / `fs_*` tools for reading/writing files (default: `<workDir>/data`).
+- **Session state directory (store)**: per-session persisted state, event logs, and Docker sandbox background job logs
+  (default: `<storeDir>/<agentId>`, where `storeDir` maps to `Kode:StoreDir`, default `./.kode`).
+
 ```
 <workDir>/
-├── .assistant-store/              # Agent persistence storage
-│   └── <agentId>/                 # State files for each agent
-└── data/                         # User data directory
+├── .kode/                         # Session state root (configurable via Kode:StoreDir)
+│   └── <agentId>/                 # Persisted session state (runtime/events/meta/...)
+│       └── sandbox/               # Docker sandbox background job logs/exitcode (optional)
+└── data/                          # Workspace directory
     ├── .memory/                  # Memory storage
     │   ├── profile.json          # User configuration (timezone, language, etc.)
     │   └── facts/                # Fact memories
@@ -170,6 +199,22 @@ This service stores conversation state in JSON files under `KODE_STORE_DIR`.
     │   └── email.json            # Email config (IMAP/SMTP)
     └── .tasks/                   # Task storage
 ```
+
+### `PerAgentDataDir` configuration use-cases
+
+`Kode:PerAgentDataDir` controls whether the **workspace** is shared or isolated per session:
+
+- `false` (default): all sessions share one workspace: `<workDir>/data`  
+  - Good for: single-tenant / single-project collaboration workflows.
+- `true`: each session gets its own workspace: `<workDir>/data/<agentId>`  
+  - Good for: multi-user / multi-tenant / high concurrency setups where you want to avoid file collisions or leakage
+    between sessions.
+
+Notes:
+
+- Even with `PerAgentDataDir=false` (shared workspace), session **state** remains isolated under `<storeDir>/<agentId>`.
+- If you enable Docker for `bash_run`, keeping session state isolated is recommended (default behavior),
+  and you can decide whether to also isolate the workspace based on your product needs.
 
 ## Tool Whitelist (allowlist)
 
@@ -453,3 +498,19 @@ Configure MCP servers via `appsettings.json`:
 ```
 
 MCP tool naming format: `mcp__{serverName}__{toolName}`
+
+### Startup warmup (optional)
+
+By default, WebApi Assistant connects to MCP servers only when the first Agent is created / the first request arrives (for stdio servers this can mean spawning external processes). To reduce first-request cold-start latency, you can enable a background warmup on application startup:
+
+```json
+{
+  "McpWarmup": {
+    "Enabled": true,
+    "PreloadTools": false
+  }
+}
+```
+
+- `Enabled`: Warm up MCP connections on startup
+- `PreloadTools`: Also preload tool list (triggers `ListTools`) to further reduce first-request latency

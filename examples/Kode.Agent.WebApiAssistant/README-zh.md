@@ -133,6 +133,27 @@ dotnet run
 
 默认监听地址以控制台输出为准（通常是 `http://localhost:5xxx`）。
 
+## Docker Sandbox 镜像（可选）
+
+如果你启用了 `Kode:Sandbox:UseDocker=true`，建议使用一个“包含常用工具链”的自定义镜像（而不是裸 `ubuntu:latest`），否则容器内可能缺少 `git`/`jq`/`rg` 等命令。
+
+仓库提供了一个可复用的 sandbox 镜像定义，支持 `linux/amd64` 与 `linux/arm64`：
+
+- `docker/sandbox/Dockerfile`
+- `docker/sandbox/README.md`（包含 buildx 多架构构建示例）
+
+构建方式（推荐使用仓库根目录的 `Makefile`）：
+
+```bash
+# 单架构本地构建（当前平台）
+make sandbox-build
+
+# 多架构构建并推送（linux/amd64 + linux/arm64）
+make sandbox-push IMAGE=your-org/kode-agent-sandbox
+```
+
+构建完成后，将 `Kode:Sandbox:DockerImage` 指向你的镜像 tag 即可（默认 tag 会读取仓库版本号 `<Version>`）。
+
 ## 接口
 
 - `POST /v1/chat/completions`（兼容 OpenAI）
@@ -156,11 +177,17 @@ dotnet run
 
 ### 数据目录结构
 
+WebApiAssistant 会区分：
+
+- **工作目录（workspace）**：给 `bash_run` / `fs_*` 等工具读写文件用（默认 `<workDir>/data`）。
+- **会话状态目录（session state / store）**：保存每个会话的持久化状态、事件日志，以及 Docker sandbox 的后台任务日志（默认 `<storeDir>/<agentId>`，`storeDir` 对应 `Kode:StoreDir`，默认 `./.kode`）。
+
 ```
 <workDir>/
-├── .assistant-store/              # Agent 持久化存储
-│   └── <agentId>/                 # 每个 agent 的状态文件
-└── data/                         # 用户数据目录
+├── .kode/                         # 会话状态根目录（可通过 Kode:StoreDir 修改）
+│   └── <agentId>/                 # 每个会话的持久化状态（runtime/events/meta/...）
+│       └── sandbox/               # Docker sandbox 后台任务日志/exitcode（可选）
+└── data/                          # 工作目录（workspace）
     ├── .memory/                  # 记忆存储
     │   ├── profile.json          # 用户配置（时区、语言等）
     │   └── facts/                # 事实记忆
@@ -170,6 +197,20 @@ dotnet run
     │   └── email.json            # 邮件配置（IMAP/SMTP）
     └── .tasks/                   # 任务存储
 ```
+
+### `PerAgentDataDir` 配置场景
+
+`Kode:PerAgentDataDir` 用来控制 **workspace 是否按会话隔离**：
+
+- `false`（默认）：所有会话共享一个 workspace：`<workDir>/data`  
+  - 适用：单租户/单项目协作型场景（大家在同一个项目目录下操作）。
+- `true`：每个会话一个 workspace：`<workDir>/data/<agentId>`  
+  - 适用：多用户/多租户/并发会话较多、需要避免文件互相覆盖或“串文件”的场景。
+
+提示：
+
+- 即使 `PerAgentDataDir=false`（共享 workspace），每个会话的 **状态** 仍然是分开的（在 `<storeDir>/<agentId>` 下）。
+- 如果你在 Docker 模式下运行 `bash_run`，建议至少保证会话状态目录分离（默认已做），并按需决定 workspace 是否也要分离。
 
 ## 工具白名单（allowlist）
 
@@ -453,3 +494,19 @@ curl http://localhost:5123/v1/chat/completions \
 ```
 
 MCP 工具命名格式：`mcp__{serverName}__{toolName}`
+
+### 启动时预热（可选）
+
+默认情况下，WebApi Assistant 会在首次创建 Agent / 首次请求时才连接 MCP server（例如 stdio server 会在此时启动外部进程）。如果你希望在应用启动时就提前建立连接、减少首个请求的冷启动延迟，可以开启预热：
+
+```json
+{
+  "McpWarmup": {
+    "Enabled": true,
+    "PreloadTools": false
+  }
+}
+```
+
+- `Enabled`: 是否在启动后后台预热连接
+- `PreloadTools`: 是否同时预加载 tool 列表（会触发 `ListTools`，可进一步减少首个请求延迟）

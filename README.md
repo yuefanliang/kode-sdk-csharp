@@ -23,6 +23,7 @@ Kode Agent SDK for .NET is the C# implementation of [Kode SDK](https://github.co
 ## Table of Contents
 
 - [Features](#-features)
+- [Sandbox (Local vs Docker)](#sandbox-local-vs-docker)
 - [Architecture Overview](#-architecture-overview)
 - [Quick Start](#-quick-start)
 - [Event Subscriptions](#-event-subscriptions)
@@ -50,13 +51,26 @@ Kode Agent SDK for .NET is the C# implementation of [Kode SDK](https://github.co
 | Three-Channel Event Stream     | Progress (real-time output), Control (approval flow), Monitor (logging) separated architecture                    | [Event System Details](docs/ADVANCED_GUIDE.md#event-system-details)         |
 | State Persistence       | JSON file storage and Redis distributed storage, support for session recovery and resumable execution                                | [State Storage](docs/ADVANCED_GUIDE.md#state-storage)                 |
 | Permission Control         | Fine-grained tool permission management, support for auto-approval, manual approval, and deny policies                                  | [Permission Control System](docs/ADVANCED_GUIDE.md#permission-control-system)         |
-| Sandbox Execution         | Secure command execution environment, support for local and Docker sandboxes                                              | [Advanced Guide - Sandbox](docs/ADVANCED_GUIDE.md)                   |
+| Sandbox Execution         | Secure command execution environment, support for local and Docker sandboxes                                              | [Sandbox Environments](docs/ADVANCED_GUIDE.md#sandbox-environments)                   |
 | Source Generator | Compile-time tool schema generation, zero reflection overhead, type-safe                                            | [Tool Development Guide](docs/ADVANCED_GUIDE.md#tool-development-guide)         |
 | MCP Integration         | Native Model Context Protocol support, easy integration with external tool ecosystem                                   | [MCP Protocol Integration](docs/ADVANCED_GUIDE.md#mcp-protocol-integration)         |
 | Dependency Injection         | Complete Microsoft.Extensions.DependencyInjection support                                    | [Dependency Injection](#dependency-injection)                                       |
 | Template System         | Predefined agent templates for quick creation of scenario-specific agents                                             | [Sub-Agent Delegation](docs/ADVANCED_GUIDE.md#sub-agent-delegation) |
 | Skills System      | Progressive skill discovery and activation, dynamic extension of agent capabilities                                               | [Skills System](docs/ADVANCED_GUIDE.md#skills-system)           |
 | Sub-Agent Delegation   | Support for task delegation to specialized sub-agents, enabling complex workflow orchestration                                        | [Sub-Agent Delegation](docs/ADVANCED_GUIDE.md#sub-agent-delegation) |
+
+## Sandbox (Local vs Docker)
+
+The SDK exposes a single `ISandbox` interface, but you can choose different implementations depending on your risk/performance needs:
+
+| Dimension | LocalSandbox | DockerSandbox |
+|---|---|---|
+| **Command execution** | Runs commands on the host | Runs commands in a dedicated container |
+| **Blast radius** | Higher (host-wide if misused) | Lower (container + mounted paths) |
+| **Toolchain** | Uses host-installed tools | Depends on Docker image (`DockerImage`) |
+| **Network** | Same as host | Configurable (often `none`) |
+
+More details: `docs/ADVANCED_GUIDE.md#sandbox-environments`.
 
 ## Architecture Overview
 

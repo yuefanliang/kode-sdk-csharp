@@ -22,15 +22,17 @@ public sealed class SkillListTool : ToolBase<SkillListArgs>
         RequiresApproval = false
     };
 
+    private static readonly string[] value = new[] { "Ensure skills are enabled in the agent configuration" };
+
     public override ValueTask<string?> GetPromptAsync(ToolContext context)
     {
         return ValueTask.FromResult<string?>(
             "### skill_list\n\n" +
-            "列出当前可用的 Skills。返回每个 Skill 的名称、描述和激活状态。\n\n" +
-            "使用场景：\n" +
-            "- 当需要了解有哪些 Skills 可用时\n" +
-            "- 在选择激活哪个 Skill 之前\n" +
-            "- 检查 Skill 的激活状态");
+            "List currently available Skills. Returns each Skill's name, description, and activation status.\n\n" +
+            "Use cases:\n" +
+            "- When you need to see which Skills are available\n" +
+            "- Before choosing which Skill to activate\n" +
+            "- To check a Skill's activation status");
     }
 
     protected override Task<ToolResult> ExecuteAsync(
@@ -45,7 +47,7 @@ public sealed class SkillListTool : ToolBase<SkillListArgs>
             {
                 ok = false,
                 error = "Skills not configured for this agent",
-                recommendations = new[] { "确认 Agent 配置中启用了 skills" }
+                recommendations = value
             }));
         }
 
@@ -56,7 +58,7 @@ public sealed class SkillListTool : ToolBase<SkillListArgs>
             {
                 ok = false,
                 error = "Skills manager not available",
-                recommendations = new[] { "确认 Agent 配置中启用了 skills" }
+                recommendations = value
             }));
         }
 

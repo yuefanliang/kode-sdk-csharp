@@ -106,7 +106,7 @@ public sealed class LocalSandbox : ISandbox
             }
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        var process = new Process { StartInfo = startInfo };
         var stdout = new System.Text.StringBuilder();
         var stderr = new System.Text.StringBuilder();
 
@@ -125,6 +125,9 @@ public sealed class LocalSandbox : ISandbox
 
         if (options?.Background == true)
         {
+            // IMPORTANT:
+            // Background processes must NOT be disposed at the end of this method.
+            // We intentionally keep the Process instance alive so bash_logs / bash_kill can inspect/terminate it later.
             var bgProcess = new BackgroundProcess
             {
                 Process = process,
@@ -158,25 +161,28 @@ public sealed class LocalSandbox : ISandbox
             };
         }
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(timeout);
+        using (process)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(timeout);
 
-        try
-        {
-            await process.WaitForExitAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(true);
-            throw;
-        }
+            try
+            {
+                await process.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(true);
+                throw;
+            }
 
-        return new CommandResult
-        {
-            ExitCode = process.ExitCode,
-            Stdout = stdout.ToString(),
-            Stderr = stderr.ToString()
-        };
+            return new CommandResult
+            {
+                ExitCode = process.ExitCode,
+                Stdout = stdout.ToString(),
+                Stderr = stderr.ToString()
+            };
+        }
     }
 
     public async Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default)

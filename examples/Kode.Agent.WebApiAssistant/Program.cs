@@ -57,7 +57,7 @@ try
         registry.RegisterPlatformTools(sp);
         return registry;
     });
-    builder.Services.AddSingleton<ISandboxFactory, LocalSandboxFactory>();
+    builder.Services.AddSingleton<ISandboxFactory, DefaultSandboxFactory>();
     builder.Services.AddSingleton<IModelProvider>(sp =>
     {
         var options = sp.GetRequiredService<AssistantOptions>();
@@ -73,11 +73,14 @@ try
         ModelProvider = sp.GetRequiredService<IModelProvider>(),
         LoggerFactory = sp.GetService<ILoggerFactory>()
     });
+    builder.Services.AddSingleton<AssistantAgentPool>();
+    builder.Services.AddHostedService<AssistantAgentPoolEvictionService>();
     builder.Services.AddSingleton<AssistantService>();
 
     // 添加 MCP 服务
     builder.Services.AddMcpClientManager();
     builder.Services.AddSingleton<McpServersLoader>();
+    builder.Services.AddHostedService<McpWarmupHostedService>();
 
     // // 添加任务调度器
     // builder.Services.AddHostedService<Kode.Agent.WebApiAssistant.Scheduler.TaskScheduler>();

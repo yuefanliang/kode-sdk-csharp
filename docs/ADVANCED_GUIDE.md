@@ -10,14 +10,15 @@ This document provides in-depth SDK usage instructions and best practices.
 2. [Agent Lifecycle](#agent-lifecycle)
 3. [Event System Details](#event-system-details)
 4. [Tool Development Guide](#tool-development-guide)
-5. [Skills System](#skills-system)
-6. [Sub-Agent Task Delegation](#sub-agent-task-delegation)
-7. [Model Providers Deep Dive](#model-providers-deep-dive)
-8. [MCP Protocol Integration](#mcp-protocol-integration)
-9. [Permission Control System](#permission-control-system)
-10. [State Storage](#state-storage)
-11. [Error Handling](#error-handling)
-12. [Best Practices](#best-practices)
+5. [Sandbox Environments](#sandbox-environments)
+6. [Skills System](#skills-system)
+7. [Sub-Agent Task Delegation](#sub-agent-task-delegation)
+8. [Model Providers Deep Dive](#model-providers-deep-dive)
+9. [MCP Protocol Integration](#mcp-protocol-integration)
+10. [Permission Control System](#permission-control-system)
+11. [State Storage](#state-storage)
+12. [Error Handling](#error-handling)
+13. [Best Practices](#best-practices)
 
 ---
 
@@ -609,6 +610,66 @@ public record ToolContext(
     CancellationToken CancellationToken
 );
 ```
+
+---
+
+## Sandbox Environments
+
+The SDK supports two sandbox implementations behind the `ISandbox` interface:
+
+- **LocalSandbox**: executes commands directly on the host machine.
+- **DockerSandbox**: executes commands inside a dedicated Docker container (workspace is mounted in).
+
+### LocalSandbox vs DockerSandbox (Comparison)
+
+| Dimension | LocalSandbox (Host) | DockerSandbox (Container) |
+|---|---|---|
+| **`bash_run` execution** | Runs on the host (`/bin/bash -c` / `cmd.exe /c`) | Runs via `docker exec` inside a container |
+| **Isolation boundary** | Weak (best-effort guardrails only) | Stronger (command execution isolated to container + mounted paths) |
+| **Visible files for `bash_run`** | Potentially the whole host filesystem | Primarily mounted paths: `WorkingDirectory` and `AllowPaths` |
+| **`fs_*` tools** | Host filesystem (bounded by `WorkingDirectory` + `AllowPaths`) | Same: host filesystem (bounded), independent of container |
+| **Network** | Same as host network permissions | Configurable; common default is `none` (no network) |
+| **Background processes** | Host PIDs; logs collected in-memory | Container PIDs; logs/exitcode stored on disk (state directory) |
+| **Toolchain availability** | Uses host-installed tools | Depends on Docker image (`DockerImage`) |
+| **Operational overhead** | Minimal | Requires Docker daemon; container lifecycle management |
+| **Best for** | Local dev, trusted environments, easiest setup | Safer `bash_run`, multi-user/multi-tenant, limiting blast radius |
+
+### Practical Recommendations
+
+- Prefer **DockerSandbox** when:
+  - You allow `bash_run` in a production or semi-trusted environment.
+  - You need to reduce the risk of host-wide damage from shell commands.
+  - You want network isolation (`DockerNetworkMode = "none"`) by default.
+- Prefer **LocalSandbox** when:
+  - You run in a trusted dev machine and want to use the host toolchain directly.
+  - You cannot assume Docker is available.
+
+### Configuration (SandboxOptions)
+
+At runtime the sandbox is selected by `SandboxOptions.UseDocker`:
+
+```csharp
+var sandboxOptions = new SandboxOptions
+{
+    WorkingDirectory = "/path/to/workspace",
+    EnforceBoundary = true,
+    AllowPaths = new[] { "/path/to/workspace" },
+
+    UseDocker = true,
+    DockerImage = "kode-agent-sandbox:latest",
+    DockerNetworkMode = "none",
+
+    // Optional: keep DockerSandbox job logs out of the workspace.
+    // For example, per-session store directory: "<storeDir>/<agentId>"
+    SandboxStateDirectory = "/path/to/.kode/<agentId>"
+};
+```
+
+Notes:
+
+- `fs_*` operations always happen on the host and are protected by `WorkingDirectory` + `AllowPaths` checks.
+- DockerSandbox reduces the *command execution* blast radius, but mounted paths are still writable (unless you mount them read-only).
+- Approval/policy controls are still recommended for `bash_run` even with Docker isolation.
 
 ---
 

@@ -111,6 +111,9 @@ examples/**/.kode/
 examples/**/.env
 !examples/**/.env.example
 
+## MCP (local dev config; may contain secrets)
+.mcp/
+
 ## Documentation (keep important markdown files)
 # We keep all markdown files for documentation
 # If you want to ignore specific markdown files, uncomment and customize:

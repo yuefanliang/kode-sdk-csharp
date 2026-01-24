@@ -105,12 +105,12 @@ public static class RuntimeFactory
             {
                 Templates = templates,
                 Tools = toolRegistry,
-                RegisterBuiltin = groups => RegisterBuiltin(groups)
+                RegisterBuiltin = RegisterBuiltin
             });
         }
 
         // Create sandbox factory
-        var sandboxFactory = new LocalSandboxFactory();
+        var sandboxFactory = new DefaultSandboxFactory();
 
         // Create model provider based on configuration
         var modelProvider = CreateModelProvider();
@@ -143,7 +143,7 @@ public static class RuntimeFactory
 
         return provider.ToLowerInvariant() switch
         {
-            "openai" => CreateOpenAIProvider(httpClient),
+            "openai" => CreateOpenAiProvider(httpClient),
             _ => CreateAnthropicProvider(httpClient)
         };
     }
@@ -163,7 +163,7 @@ public static class RuntimeFactory
         return new AnthropicProvider(httpClient, options);
     }
 
-    private static OpenAIProvider CreateOpenAIProvider(HttpClient httpClient)
+    private static OpenAIProvider CreateOpenAiProvider(HttpClient httpClient)
     {
         var apiKey = EnvLoader.Get("OPENAI_API_KEY")
             ?? throw new InvalidOperationException("OPENAI_API_KEY environment variable is required");

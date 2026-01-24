@@ -62,4 +62,19 @@ public record CreateAssistantOptions
     /// Optional permission configuration override.
     /// </summary>
     public PermissionConfig? Permissions { get; init; }
+
+    /// <summary>
+    /// Whether to run commands inside Docker (uses SDK DockerSandbox).
+    /// </summary>
+    public bool UseDockerSandbox { get; init; }
+
+    /// <summary>
+    /// Docker image for the sandbox (must include bash).
+    /// </summary>
+    public string? DockerImage { get; init; }
+
+    /// <summary>
+    /// Docker network mode (default: "none" for safety).
+    /// </summary>
+    public string? DockerNetworkMode { get; init; }
 }

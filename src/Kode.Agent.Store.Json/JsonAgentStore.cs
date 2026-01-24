@@ -453,8 +453,11 @@ public sealed class JsonAgentStore : IAgentStore
 
     public Task<bool> ExistsAsync(string agentId, CancellationToken cancellationToken = default)
     {
-        var agentDir = GetAgentDir(agentId);
-        return Task.FromResult(Directory.Exists(agentDir));
+        // "Exists" should mean the agent is resumable. The source of truth for that is meta.json.
+        // The agent directory can be created by event logs/runtime files before meta is persisted,
+        // which would otherwise cause resume attempts to fail with "Agent metadata not found".
+        var metaPath = GetMetaPath(agentId);
+        return Task.FromResult(File.Exists(metaPath));
     }
 
     public Task<IReadOnlyList<string>> ListAsync(CancellationToken cancellationToken = default)
@@ -464,8 +467,14 @@ public sealed class JsonAgentStore : IAgentStore
             return Task.FromResult<IReadOnlyList<string>>([]);
         }
 
+        // Only return agents that have meta.json, otherwise they are not resumable.
         var agents = Directory.GetDirectories(_baseDir)
-            .Select(Path.GetFileName)
+            .Select(dir =>
+            {
+                var name = Path.GetFileName(dir);
+                if (string.IsNullOrEmpty(name)) return null;
+                return File.Exists(GetMetaPath(name)) ? name : null;
+            })
             .Where(name => !string.IsNullOrEmpty(name))
             .Cast<string>()
             .ToList();

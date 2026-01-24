@@ -101,8 +101,20 @@ public static class AssistantBuilder
                 ? Path.Combine(workDir, ".users", options.UserId!)
                 : Path.Combine(workDir, "data");
 
+        // Determine session directory (for store + sandbox internal state).
+        // By default, WebApiAssistant uses a shared workspace under "<workDir>/data" and keeps per-session state under
+        // "<storeDir>/<agentId>" (aligned with JsonAgentStore).
+        var storeDir = !string.IsNullOrEmpty(options.StoreDir)
+            ? options.StoreDir!
+            : Path.Combine(workDir, ".kode");
+        var resolvedStoreDir = Path.IsPathRooted(storeDir)
+            ? Path.GetFullPath(storeDir)
+            : Path.GetFullPath(Path.Combine(workDir, storeDir));
+        var sessionDir = Path.Combine(resolvedStoreDir, effectiveAgentId);
+
         // Ensure data directory structure
         EnsureDataDirectory(dataDir, loggerFactory);
+        Directory.CreateDirectory(sessionDir);
 
         // Create per-agent dependencies with tool registry
         var agentDeps = await CreateAgentDependenciesAsync(
@@ -174,7 +186,11 @@ public static class AssistantBuilder
             {
                 WorkingDirectory = dataDir,
                 EnforceBoundary = true,
-                AllowPaths = allowPaths
+                AllowPaths = allowPaths,
+                UseDocker = options.UseDockerSandbox,
+                DockerImage = options.DockerImage,
+                DockerNetworkMode = options.DockerNetworkMode,
+                SandboxStateDirectory = sessionDir
             },
             Skills = options.Skills,
             Hooks = [hooksResult.Hooks]
@@ -368,8 +384,7 @@ public static class AssistantBuilder
 
         // Load MCP tools (from global configuration)
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        var mcpManager = serviceProvider.GetRequiredService<Kode.Agent.Mcp.McpClientManager>();
-        var mcpServersLoader = new Services.McpServersLoader(mcpManager, loggerFactory.CreateLogger<Services.McpServersLoader>());
+        var mcpServersLoader = serviceProvider.GetRequiredService<Services.McpServersLoader>();
         await mcpServersLoader.LoadAndRegisterServersAsync(configuration, agentRegistry);
 
         // Get template registry from global deps

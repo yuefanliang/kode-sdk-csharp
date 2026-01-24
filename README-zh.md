@@ -23,6 +23,7 @@ Kode Agent SDK for .NET 是 [Kode SDK](https://github.com/shareAI-lab/kode-agent
 ## 📑 目录
 
 - [特性](#-特性)
+- [沙箱（Local vs Docker）](#-沙箱local-vs-docker)
 - [架构概览](#-架构概览)
 - [快速开始](#-快速开始)
 - [事件订阅](#-事件订阅)
@@ -46,17 +47,30 @@ Kode Agent SDK for .NET 是 [Kode SDK](https://github.com/shareAI-lab/kode-agent
 | 特性                    | 描述                                                                                    | 文档                                                        |
 | ----------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | 🤖 **多模型支持**       | 支持 Anthropic Claude (Claude 4, 3.5) 和 OpenAI GPT (GPT-4o, o1) 系列模型，以及兼容 API | [模型提供者](#模型提供者)                                   |
-| 🔧 **丰富的工具系统**   | 20+ 内置工具（文件系统、Shell、Todo 管理等），支持自定义工具和 MCP 协议                 | [工具开发指南](docs/ADVANCED_GUIDE.md#工具开发指南)         |
-| 📡 **三通道事件流**     | Progress（实时输出）、Control（审批流）、Monitor（日志监控）分离架构                    | [事件系统详解](docs/ADVANCED_GUIDE.md#事件系统详解)         |
-| 💾 **状态持久化**       | JSON 文件存储和 Redis 分布式存储，支持会话恢复和断点续传                                | [状态存储](docs/ADVANCED_GUIDE.md#状态存储)                 |
-| 🔒 **权限控制**         | 细粒度的工具权限管理，支持自动审批、手动审批和拒绝策略                                  | [权限控制系统](docs/ADVANCED_GUIDE.md#权限控制系统)         |
-| 🛡️ **沙箱执行**         | 安全的命令执行环境，支持本地和 Docker 沙箱                                              | [进阶指南 - 沙箱](docs/ADVANCED_GUIDE.md)                   |
-| ⚡ **Source Generator** | 编译时工具 Schema 生成，零反射开销，类型安全                                            | [工具开发指南](docs/ADVANCED_GUIDE.md#工具开发指南)         |
-| 🔌 **MCP 集成**         | 原生支持 Model Context Protocol，轻松接入外部工具生态                                   | [MCP 协议集成](docs/ADVANCED_GUIDE.md#mcp-协议集成)         |
+| 🔧 **丰富的工具系统**   | 20+ 内置工具（文件系统、Shell、Todo 管理等），支持自定义工具和 MCP 协议                 | [工具开发指南](docs/ADVANCED_GUIDE-zh.md#工具开发指南)      |
+| 📡 **三通道事件流**     | Progress（实时输出）、Control（审批流）、Monitor（日志监控）分离架构                    | [事件系统详解](docs/ADVANCED_GUIDE-zh.md#事件系统详解)      |
+| 💾 **状态持久化**       | JSON 文件存储和 Redis 分布式存储，支持会话恢复和断点续传                                | [状态存储](docs/ADVANCED_GUIDE-zh.md#状态存储)              |
+| 🔒 **权限控制**         | 细粒度的工具权限管理，支持自动审批、手动审批和拒绝策略                                  | [权限控制系统](docs/ADVANCED_GUIDE-zh.md#权限控制系统)      |
+| 🛡️ **沙箱执行**         | 安全的命令执行环境，支持本地和 Docker 沙箱                                              | [沙箱环境](docs/ADVANCED_GUIDE-zh.md#沙箱环境)              |
+| ⚡ **Source Generator** | 编译时工具 Schema 生成，零反射开销，类型安全                                            | [工具开发指南](docs/ADVANCED_GUIDE-zh.md#工具开发指南)      |
+| 🔌 **MCP 集成**         | 原生支持 Model Context Protocol，轻松接入外部工具生态                                   | [MCP 协议集成](docs/ADVANCED_GUIDE-zh.md#mcp-协议集成)      |
 | 💉 **依赖注入**         | 完整的 Microsoft.Extensions.DependencyInjection 支持                                    | [依赖注入](#依赖注入)                                       |
-| 📋 **模板系统**         | 预定义 Agent 模板，快速创建特定场景的 Agent                                             | [Sub-Agent 委派](docs/ADVANCED_GUIDE.md#sub-agent-任务委派) |
-| 🎯 **Skills 系统**      | 渐进式技能发现与激活，动态扩展 Agent 能力                                               | [Skills 系统](docs/ADVANCED_GUIDE.md#skills-系统)           |
-| 🔀 **Sub-Agent 委派**   | 支持任务委派给专门的子 Agent，实现复杂工作流编排                                        | [Sub-Agent 委派](docs/ADVANCED_GUIDE.md#sub-agent-任务委派) |
+| 📋 **模板系统**         | 预定义 Agent 模板，快速创建特定场景的 Agent                                             | [Sub-Agent 委派](docs/ADVANCED_GUIDE-zh.md#sub-agent-任务委派) |
+| 🎯 **Skills 系统**      | 渐进式技能发现与激活，动态扩展 Agent 能力                                               | [Skills 系统](docs/ADVANCED_GUIDE-zh.md#skills-系统)        |
+| 🔀 **Sub-Agent 委派**   | 支持任务委派给专门的子 Agent，实现复杂工作流编排                                        | [Sub-Agent 委派](docs/ADVANCED_GUIDE-zh.md#sub-agent-任务委派) |
+
+## 🛡️ 沙箱（Local vs Docker）
+
+SDK 对外暴露统一的 `ISandbox` 接口，但可以根据风险/性能需求选择不同实现：
+
+| 维度 | LocalSandbox | DockerSandbox |
+|---|---|---|
+| **命令执行** | 在主机上执行 | 在专用容器内执行（`docker exec`） |
+| **影响范围（blast radius）** | 更大（误操作可能影响整机） | 更小（容器 + 挂载路径） |
+| **工具链** | 使用主机已安装工具 | 依赖镜像内工具（`DockerImage`） |
+| **网络** | 跟随主机 | 可配置（常见 `none` 断网） |
+
+更多细节：`docs/ADVANCED_GUIDE-zh.md#沙箱环境`。
 
 ## 🏗️ 架构概览
 

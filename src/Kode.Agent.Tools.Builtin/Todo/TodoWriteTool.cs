@@ -61,7 +61,7 @@ public sealed class TodoWriteTool : ToolBase<TodoWriteArgs>
             }).ToList();
 
             // Set todos on the agent
-            if (context.Agent is IAgent agent)
+            if (context.Agent is { } agent)
             {
                 await agent.SetTodosAsync(todoItems, cancellationToken);
                 return ToolResult.Ok(new { ok = true, count = todoItems.Count });

@@ -106,7 +106,10 @@ public sealed class TodoManager
 
     private async Task SendEmptyReminderAsync(CancellationToken cancellationToken)
     {
-        await _remind("当前 todo 列表为空，如需跟踪任务请使用 todo_write 建立清单。", "todo", cancellationToken);
+        await _remind(
+            "The current todo list is empty. If you want to track tasks, use todo_write to create a list.",
+            "todo",
+            cancellationToken);
     }
 
     private static string FormatTodoReminder(IReadOnlyList<TodoItem> todos)
@@ -115,8 +118,9 @@ public sealed class TodoManager
             .Take(10)
             .Select((todo, idx) => $"{idx + 1}. [{todo.Status}] {todo.Title}")
             .ToList();
-        var more = todos.Count > 10 ? $"\n… 还有 {todos.Count - 10} 项" : "";
-        return $"Todo 列表仍有未完成项：\n{string.Join("\n", lines)}{more}\n请结合 todo_write 及时更新进度，不要向用户直接提及本提醒。";
+        var more = todos.Count > 10 ? $"\n… and {todos.Count - 10} more" : "";
+        return
+            $"There are unfinished items in the todo list:\n{string.Join("\n", lines)}{more}\nUse todo_write to keep progress up to date. DO NOT mention this reminder to the user.";
     }
 
     private static TodoInput ToInput(TodoItem item)

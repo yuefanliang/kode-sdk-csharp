@@ -10,14 +10,15 @@
 2. [Agent 生命周期](#agent-生命周期)
 3. [事件系统详解](#事件系统详解)
 4. [工具开发指南](#工具开发指南)
-5. [Skills 系统](#skills-系统)
-6. [Sub-Agent 任务委派](#sub-agent-任务委派)
-7. [模型提供者深入](#模型提供者深入)
-8. [MCP 协议集成](#mcp-协议集成)
-9. [权限控制系统](#权限控制系统)
-10. [状态存储](#状态存储)
-11. [错误处理](#错误处理)
-12. [最佳实践](#最佳实践)
+5. [沙箱环境](#沙箱环境)
+6. [Skills 系统](#skills-系统)
+7. [Sub-Agent 任务委派](#sub-agent-任务委派)
+8. [模型提供者深入](#模型提供者深入)
+9. [MCP 协议集成](#mcp-协议集成)
+10. [权限控制系统](#权限控制系统)
+11. [状态存储](#状态存储)
+12. [错误处理](#错误处理)
+13. [最佳实践](#最佳实践)
 
 ---
 
@@ -611,6 +612,66 @@ public record ToolContext(
     CancellationToken CancellationToken
 );
 ```
+
+---
+
+## 沙箱环境
+
+SDK 在 `ISandbox` 接口后面提供了两种沙箱实现：
+
+- **LocalSandbox**：直接在物理主机上执行命令。
+- **DockerSandbox**：在专用 Docker 容器内执行命令（把工作目录挂载进去）。
+
+### LocalSandbox vs DockerSandbox（对比）
+
+| 维度 | LocalSandbox（物理主机） | DockerSandbox（容器） |
+|---|---|---|
+| **`bash_run` 执行位置** | 主机上执行（`/bin/bash -c` / `cmd.exe /c`） | 容器内执行（`docker exec`） |
+| **隔离边界** | 弱（仅 best-effort 的防护/约束） | 更强（命令执行隔离在容器 + 挂载目录范围内） |
+| **`bash_run` 可见文件范围** | 理论上可访问整个主机文件系统 | 主要只能访问挂载进来的路径：`WorkingDirectory` + `AllowPaths` |
+| **`fs_*` 工具** | 直接读写主机文件系统（受 `WorkingDirectory` + `AllowPaths` 限制） | 同样读写主机文件系统（受边界限制），与容器隔离互补 |
+| **网络** | 跟随主机网络权限 | 可配置；常见默认是 `none`（断网） |
+| **后台进程** | 主机 PID；日志主要在内存里累计 | 容器 PID；日志/exitcode 落盘到 state 目录 |
+| **工具链可用性** | 依赖主机已安装的工具 | 依赖镜像内的工具（`DockerImage`） |
+| **运维开销** | 最低 | 需要 Docker daemon；管理容器生命周期 |
+| **适用场景** | 本地开发、可信环境、最省事 | 更安全地开放 `bash_run`、多用户/多租户、缩小影响范围 |
+
+### 实践建议
+
+- 优先使用 **DockerSandbox** 的情况：
+  - 你在生产/半可信环境开放了 `bash_run`。
+  - 你希望显著降低 shell 命令对“整台物理机”的破坏面。
+  - 你希望默认断网（`DockerNetworkMode = "none"`）。
+- 选择 **LocalSandbox** 的情况：
+  - 纯本地开发、可信机器，且需要直接使用主机工具链。
+  - 无法依赖 Docker 环境。
+
+### 配置（SandboxOptions）
+
+运行时由 `SandboxOptions.UseDocker` 决定使用哪种沙箱：
+
+```csharp
+var sandboxOptions = new SandboxOptions
+{
+    WorkingDirectory = "/path/to/workspace",
+    EnforceBoundary = true,
+    AllowPaths = new[] { "/path/to/workspace" },
+
+    UseDocker = true,
+    DockerImage = "kode-agent-sandbox:latest",
+    DockerNetworkMode = "none",
+
+    // 可选：把 DockerSandbox 的后台任务日志从 workspace 中分离出来
+    // 例如：每个会话的状态目录 "<storeDir>/<agentId>"
+    SandboxStateDirectory = "/path/to/.kode/<agentId>"
+};
+```
+
+说明：
+
+- `fs_*` 文件操作始终发生在主机侧，并通过 `WorkingDirectory` + `AllowPaths` 做边界校验。
+- DockerSandbox 主要缩小的是“命令执行”的破坏面，但挂载目录仍然可写（除非你用只读挂载策略）。
+- 即使使用 DockerSandbox，仍然建议保留 `bash_run` 的审批/策略控制（防止误删 workspace 等）。
 
 ---
 

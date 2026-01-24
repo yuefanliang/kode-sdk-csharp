@@ -27,7 +27,9 @@ public sealed class McpServersLoader : IAsyncDisposable
     private readonly McpClientManager _mcpManager;
     private readonly ILogger<McpServersLoader> _logger;
     private readonly ConcurrentDictionary<string, McpConfig> _serverConfigs = new();
+    private readonly ConcurrentDictionary<string, Lazy<Task<IReadOnlyList<ITool>>>> _toolsCache = new();
     private bool _disposed;
+    private int _configsLoaded;
 
     public McpServersLoader(
         McpClientManager mcpManager,
@@ -35,6 +37,49 @@ public sealed class McpServersLoader : IAsyncDisposable
     {
         _mcpManager = mcpManager;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Pre-warms MCP server connections on startup (optional).
+    /// </summary>
+    public async Task WarmupAsync(
+        IConfiguration configuration,
+        bool preloadTools = false,
+        CancellationToken cancellationToken = default)
+    {
+        LoadServerConfigs(configuration);
+
+        if (_serverConfigs.Count == 0)
+        {
+            _logger.LogInformation("MCP warmup skipped: no servers configured");
+            return;
+        }
+
+        _logger.LogInformation(
+            "MCP warmup started. Servers={Count} PreloadTools={PreloadTools}",
+            _serverConfigs.Count,
+            preloadTools);
+
+        foreach (var (serverName, mcpConfig) in _serverConfigs)
+        {
+            try
+            {
+                if (preloadTools)
+                {
+                    _ = await GetToolsForServerAsync(serverName, mcpConfig, cancellationToken);
+                }
+                else
+                {
+                    _ = await _mcpManager.ConnectAsync(serverName, mcpConfig, cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "MCP warmup failed for server: {ServerName}", serverName);
+            }
+        }
+
+        _logger.LogInformation("MCP warmup completed. ConnectedServers={ConnectedCount}", _mcpManager.ConnectedServers.Count);
     }
 
     /// <summary>
@@ -46,42 +91,22 @@ public sealed class McpServersLoader : IAsyncDisposable
         IToolRegistry toolRegistry,
         CancellationToken cancellationToken = default)
     {
-        var mcpServersSection = configuration.GetSection("McpServers");
-        if (!mcpServersSection.Exists())
+        LoadServerConfigs(configuration);
+        if (_serverConfigs.Count == 0)
         {
             _logger.LogInformation("No MCP servers configuration found");
             return Array.Empty<string>();
         }
 
-        var mcpServers = mcpServersSection.GetChildren().ToList();
-        _logger.LogInformation("Found {Count} MCP servers in configuration", mcpServers.Count);
+        _logger.LogInformation("Found {Count} MCP servers in configuration", _serverConfigs.Count);
 
         var mcpToolNames = new List<string>();
-        foreach (var serverSection in mcpServers)
+        foreach (var (serverName, mcpConfig) in _serverConfigs)
         {
-            var serverName = serverSection.Key;
-            var serverConfig = serverSection.Get<McpServerConfigOptions>();
-
-            if (serverConfig == null)
-            {
-                _logger.LogWarning("Skipping MCP server {ServerName}: invalid configuration", serverName);
-                continue;
-            }
-
             try
             {
-                var mcpConfig = ConvertToMcpConfig(serverName, serverConfig);
-                if (mcpConfig == null)
-                {
-                    _logger.LogWarning("Skipping MCP server {ServerName}: unsupported transport type", serverName);
-                    continue;
-                }
-
-                // Store config for later reference
-                _serverConfigs.TryAdd(serverName, mcpConfig);
-
                 // Load tools from this server (McpToolProvider logs the tool count)
-                var tools = await McpToolProvider.GetToolsAsync(_mcpManager, mcpConfig, _logger, cancellationToken);
+                var tools = await GetToolsForServerAsync(serverName, mcpConfig, cancellationToken);
 
                 // Register each tool and collect names
                 foreach (var tool in tools)
@@ -98,6 +123,55 @@ public sealed class McpServersLoader : IAsyncDisposable
 
         _logger.LogInformation("Total MCP tools loaded: {TotalCount}", mcpToolNames.Count);
         return mcpToolNames;
+    }
+
+    private Task<IReadOnlyList<ITool>> GetToolsForServerAsync(
+        string serverName,
+        McpConfig mcpConfig,
+        CancellationToken cancellationToken)
+    {
+        var lazy = _toolsCache.GetOrAdd(
+            serverName,
+            _ => new Lazy<Task<IReadOnlyList<ITool>>>(() =>
+                McpToolProvider.GetToolsAsync(_mcpManager, mcpConfig, _logger, cancellationToken)));
+
+        return lazy.Value;
+    }
+
+    private void LoadServerConfigs(IConfiguration configuration)
+    {
+        if (Interlocked.Exchange(ref _configsLoaded, 1) == 1)
+        {
+            return;
+        }
+
+        var mcpServersSection = configuration.GetSection("McpServers");
+        if (!mcpServersSection.Exists())
+        {
+            return;
+        }
+
+        var mcpServers = mcpServersSection.GetChildren().ToList();
+        foreach (var serverSection in mcpServers)
+        {
+            var serverName = serverSection.Key;
+            var serverConfig = serverSection.Get<McpServerConfigOptions>();
+
+            if (serverConfig == null)
+            {
+                _logger.LogWarning("Skipping MCP server {ServerName}: invalid configuration", serverName);
+                continue;
+            }
+
+            var mcpConfig = ConvertToMcpConfig(serverName, serverConfig);
+            if (mcpConfig == null)
+            {
+                _logger.LogWarning("Skipping MCP server {ServerName}: unsupported/invalid configuration", serverName);
+                continue;
+            }
+
+            _serverConfigs.TryAdd(serverName, mcpConfig);
+        }
     }
 
     /// <summary>
@@ -175,7 +249,23 @@ public sealed class McpServersLoader : IAsyncDisposable
         if (_disposed) return;
         _disposed = true;
 
-        await DisconnectAllAsync();
-        await _mcpManager.DisposeAsync();
+        try
+        {
+            // Best-effort cleanup: do not crash host shutdown if an MCP stdio process already exited.
+            await DisconnectAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "McpServersLoader.DisconnectAllAsync failed during disposal (ignored)");
+        }
+
+        try
+        {
+            await _mcpManager.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "McpClientManager.DisposeAsync failed during disposal (ignored)");
+        }
     }
 }

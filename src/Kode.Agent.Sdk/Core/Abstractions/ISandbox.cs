@@ -183,6 +183,19 @@ public record SandboxOptions
     /// Docker image to use (if UseDocker is true).
     /// </summary>
     public string? DockerImage { get; init; }
+
+    /// <summary>
+    /// Optional sandbox internal state directory on the host (implementation-dependent).
+    /// For DockerSandbox this is used to store background job stdout/stderr/exit-code files.
+    /// When not set, DockerSandbox defaults to a ".kode" directory under the sandbox WorkingDirectory.
+    /// </summary>
+    public string? SandboxStateDirectory { get; init; }
+
+    /// <summary>
+    /// Docker network mode (if UseDocker is true).
+    /// Default is "none" for safety. Set to "bridge" (or other Docker modes) if network access is required.
+    /// </summary>
+    public string? DockerNetworkMode { get; init; } = "none";
 }
 
 /// <summary>

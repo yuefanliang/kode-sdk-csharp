@@ -13,6 +13,35 @@ public sealed record AssistantOptions
     public string? DefaultSystemPrompt { get; init; }
     public required IReadOnlyList<string> Tools { get; init; }
     public required PermissionConfig PermissionConfig { get; init; }
+    public bool UseDockerSandbox { get; init; }
+    public string? DockerImage { get; init; }
+    public string? DockerNetworkMode { get; init; }
+
+    /// <summary>
+    /// Whether to cache agents (and therefore sandboxes) per session/agentId.
+    /// When enabled, each active agent keeps its own sandbox alive (Docker => one container per active session).
+    /// </summary>
+    public bool UseAgentPool { get; init; }
+
+    /// <summary>
+    /// Maximum number of cached agents kept in memory (LRU eviction beyond this limit).
+    /// </summary>
+    public int AgentPoolMaxAgents { get; init; } = 50;
+
+    /// <summary>
+    /// Idle timeout for cached agents. Agents not accessed within this duration may be evicted.
+    /// </summary>
+    public TimeSpan AgentPoolIdleTimeout { get; init; } = TimeSpan.FromMinutes(20);
+
+    /// <summary>
+    /// How often to run eviction (sweep) for cached agents.
+    /// </summary>
+    public TimeSpan AgentPoolSweepInterval { get; init; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Whether to isolate each agent into its own data directory under WorkDir (recommended).
+    /// </summary>
+    public bool UsePerAgentDataDir { get; init; }
 
     /// <summary>
     /// Skills 配置
@@ -56,7 +85,41 @@ public sealed record AssistantOptions
             DefaultSystemPrompt = GetFirstOrNull(configuration, "Kode:SystemPrompt", "KODE_SYSTEM_PROMPT"),
             Tools = tools,
             PermissionConfig = BuildPermissionConfig(configuration),
-            SkillsConfig = skillsConfig
+            SkillsConfig = skillsConfig,
+            UseDockerSandbox = GetFirst(configuration, "Kode:Sandbox:UseDocker", "KODE_USE_DOCKER_SANDBOX", "false")
+                .Trim()
+                .Equals("true", StringComparison.OrdinalIgnoreCase),
+            DockerImage = GetFirstOrNull(configuration, "Kode:Sandbox:DockerImage", "KODE_DOCKER_IMAGE"),
+            DockerNetworkMode = GetFirstOrNull(configuration, "Kode:Sandbox:DockerNetworkMode", "KODE_DOCKER_NETWORK_MODE"),
+            UseAgentPool = GetFirst(configuration, "Kode:AgentPool:Enabled", "KODE_AGENT_POOL_ENABLED", "auto")
+                .Trim()
+                .ToLowerInvariant() switch
+                {
+                    "true" => true,
+                    "false" => false,
+                    _ => GetFirst(configuration, "Kode:Sandbox:UseDocker", "KODE_USE_DOCKER_SANDBOX", "false")
+                        .Trim()
+                        .Equals("true", StringComparison.OrdinalIgnoreCase)
+                },
+            AgentPoolMaxAgents = int.TryParse(GetFirst(configuration, "Kode:AgentPool:MaxAgents", "KODE_AGENT_POOL_MAX_AGENTS", "50"), out var maxAgents)
+                ? Math.Max(1, maxAgents)
+                : 50,
+            AgentPoolIdleTimeout = int.TryParse(GetFirst(configuration, "Kode:AgentPool:IdleMinutes", "KODE_AGENT_POOL_IDLE_MINUTES", "20"), out var idleMinutes)
+                ? TimeSpan.FromMinutes(Math.Max(1, idleMinutes))
+                : TimeSpan.FromMinutes(20),
+            AgentPoolSweepInterval = int.TryParse(GetFirst(configuration, "Kode:AgentPool:SweepSeconds", "KODE_AGENT_POOL_SWEEP_SECONDS", "60"), out var sweepSeconds)
+                ? TimeSpan.FromSeconds(Math.Max(5, sweepSeconds))
+                : TimeSpan.FromMinutes(1),
+            UsePerAgentDataDir = GetFirst(configuration, "Kode:PerAgentDataDir", "KODE_PER_AGENT_DATA_DIR", "auto")
+                .Trim()
+                .ToLowerInvariant() switch
+                {
+                    "true" => true,
+                    "false" => false,
+                    // Default to shared workspace directory (<WorkDir>/data).
+                    // Per-agent workspace isolation can be enabled explicitly.
+                    _ => false
+                }
         };
     }
 
