@@ -17,6 +17,8 @@ public class SessionService : ISessionService
     private readonly IPersistenceService _persistenceService;
     private readonly IUserService _userService;
 
+    private const string WORKSPACE_BASE_DIR = "./session-workspaces";
+
     public SessionService(
         IAgentStore store,
         ILogger<SessionService> logger,
@@ -55,11 +57,32 @@ public class SessionService : ISessionService
 
         _cache[sessionId] = session;
 
-        // 持久化保存
+        // 持久化保存会话
         var sessionEntity = MapToSessionEntity(session);
         await _persistenceService.CreateSessionAsync(sessionEntity);
 
-        _logger.LogInformation("Created new session: {SessionId} for user: {UserId}", sessionId, userId);
+        // 创建会话工作区目录
+        var workDirectory = Path.Combine(WORKSPACE_BASE_DIR, sessionId);
+        if (!Directory.Exists(workDirectory))
+        {
+            Directory.CreateDirectory(workDirectory);
+            _logger.LogInformation("Created workspace directory: {WorkDir}", workDirectory);
+        }
+
+        // 持久化保存会话工作区配置
+        var workspaceEntity = new Kode.Agent.WebApiAssistant.Services.Persistence.Entities.SessionWorkspaceEntity
+        {
+            WorkspaceId = Guid.NewGuid().ToString("N"),
+            SessionId = sessionId,
+            UserId = userId,
+            WorkDirectory = workDirectory,
+            IsDefault = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _persistenceService.UpsertSessionWorkspaceAsync(workspaceEntity);
+
+        _logger.LogInformation("Created new session: {SessionId} for user: {UserId} with workspace: {WorkDir}",
+            sessionId, userId, workDirectory);
 
         return session;
     }

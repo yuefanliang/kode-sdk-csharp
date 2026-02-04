@@ -1,6 +1,7 @@
 using System.ClientModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Kode.Agent.Sdk.Core;
 using Microsoft.Extensions.Logging;
 using OpenAI;
 using OpenAI.Chat;
@@ -33,7 +34,7 @@ public sealed class OpenAIProvider : IModelProvider
         {
             clientOptions = new OpenAIClientOptions
             {
-                Endpoint = new Uri(options.BaseUrl)
+                Endpoint = NormalizeEndpoint(options.BaseUrl)
             };
         }
 
@@ -60,12 +61,41 @@ public sealed class OpenAIProvider : IModelProvider
 
         var toolCallBuilders = new Dictionary<int, (string Id, string Name, System.Text.StringBuilder Args)>();
 
-        await foreach (var update in chatClient.CompleteChatStreamingAsync(messages, options, cancellationToken))
+        var stream = chatClient.CompleteChatStreamingAsync(messages, options, cancellationToken);
+        await using var enumerator = stream.GetAsyncEnumerator(cancellationToken);
+
+        try
         {
-            foreach (var chunk in ConvertStreamUpdate(update, toolCallBuilders))
+            while (true)
             {
-                yield return chunk;
+                bool hasNext;
+                try
+                {
+                    hasNext = await enumerator.MoveNextAsync();
+                }
+                catch (ClientResultException ex)
+                {
+                    throw new ModelException(
+                        $"OpenAI streaming request failed (HTTP {ex.Status}): {ex.Message}",
+                        model: request.Model,
+                        statusCode: ex.Status,
+                        innerException: ex);
+                }
+
+                if (!hasNext)
+                {
+                    break;
+                }
+
+                var update = enumerator.Current;
+                foreach (var chunk in ConvertStreamUpdate(update, toolCallBuilders))
+                {
+                    yield return chunk;
+                }
             }
+        }
+        finally
+        {
         }
     }
 
@@ -75,8 +105,19 @@ public sealed class OpenAIProvider : IModelProvider
         var messages = BuildChatMessages(request);
         var options = BuildChatOptions(request);
 
-        var result = await chatClient.CompleteChatAsync(messages, options, cancellationToken);
-        return ConvertToModelResponse(result.Value);
+        try
+        {
+            var result = await chatClient.CompleteChatAsync(messages, options, cancellationToken);
+            return ConvertToModelResponse(result.Value);
+        }
+        catch (ClientResultException ex)
+        {
+            throw new ModelException(
+                $"OpenAI request failed (HTTP {ex.Status}): {ex.Message}",
+                model: request.Model,
+                statusCode: ex.Status,
+                innerException: ex);
+        }
     }
 
     public async Task<bool> ValidateAsync(CancellationToken cancellationToken = default)
@@ -128,6 +169,17 @@ public sealed class OpenAIProvider : IModelProvider
         }
 
         return messages;
+    }
+
+    private static Uri NormalizeEndpoint(string baseUrl)
+    {
+        var trimmed = baseUrl.Trim();
+        trimmed = trimmed.TrimEnd('/');
+        if (trimmed.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed[..^3];
+        }
+        return new Uri(trimmed, UriKind.Absolute);
     }
 
     private static ChatMessage? ConvertMessage(Message msg)

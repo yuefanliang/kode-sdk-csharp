@@ -129,3 +129,7 @@ examples/**/.env
 *.bakup
 *_backup
 *_old
+/examples/Kode.Agent.WebApiAssistant/session-workspaces
+/node_modules
+/examples/Kode.Agent.WebApiAssistant/files
+/examples/Kode.Agent.WebApiAssistant/Migrations

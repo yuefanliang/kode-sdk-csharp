@@ -2,6 +2,7 @@ using Kode.Agent.WebApiAssistant.Models.Requests;
 using Kode.Agent.WebApiAssistant.Models.Responses;
 using Kode.Agent.WebApiAssistant.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace Kode.Agent.WebApiAssistant.Controllers;
 
@@ -145,5 +146,137 @@ public class ApprovalsController : ControllerBase
             approvalId = approvalId,
             message = "Approval cancelled successfully"
         });
+    }
+
+    /// <summary>
+    /// 批准工具调用
+    /// </summary>
+    /// <param name="approvalId">审批ID</param>
+    /// <param name="request">批准请求</param>
+    /// <returns>操作结果</returns>
+    [HttpPost("{approvalId}/approve")]
+    public async Task<ActionResult> ApproveToolCall(
+        string approvalId,
+        [FromBody] JsonElement request)
+    {
+        if (string.IsNullOrWhiteSpace(approvalId))
+        {
+            return BadRequest(new { error = "approvalId is required" });
+        }
+
+        try
+        {
+            // 正确处理dynamic类型的note字段
+            string? note = null;
+            if (request.ValueKind != JsonValueKind.Undefined &&
+                request.ValueKind != JsonValueKind.Null &&
+                request.TryGetProperty("note", out var noteProperty) &&
+                noteProperty.ValueKind != JsonValueKind.Undefined &&
+                noteProperty.ValueKind != JsonValueKind.Null)
+            {
+                note = noteProperty.ToString();
+            }
+
+            if (string.IsNullOrWhiteSpace(note))
+            {
+                note = "用户批准";
+            }
+
+            // 使用简化的工具审批方法（不验证审批人）
+            var success = await _approvalService.PerformToolApprovalActionAsync(
+                approvalId,
+                "approve",
+                note);
+
+            if (!success)
+            {
+                var existing = await _approvalService.GetApprovalAsync(approvalId);
+                if (existing == null)
+                {
+                    return NotFound(new { error = "Approval not found" });
+                }
+                return Ok(new
+                {
+                    success = true,
+                    message = "审批已处理",
+                    decision = existing.Decision
+                });
+            }
+
+            _logger.LogInformation("Tool call approved for approval {ApprovalId}", approvalId);
+
+            return Ok(new { success = true, message = "工具调用已批准" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to approve tool call");
+            return StatusCode(500, new { error = "Failed to approve", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// 拒绝工具调用
+    /// </summary>
+    /// <param name="approvalId">审批ID</param>
+    /// <param name="request">拒绝请求</param>
+    /// <returns>操作结果</returns>
+    [HttpPost("{approvalId}/reject")]
+    public async Task<ActionResult> RejectToolCall(
+        string approvalId,
+        [FromBody] JsonElement request)
+    {
+        if (string.IsNullOrWhiteSpace(approvalId))
+        {
+            return BadRequest(new { error = "approvalId is required" });
+        }
+
+        try
+        {
+            // 正确处理dynamic类型的reason字段
+            string? reason = null;
+            if (request.ValueKind != JsonValueKind.Undefined &&
+                request.ValueKind != JsonValueKind.Null &&
+                request.TryGetProperty("reason", out var reasonProperty) &&
+                reasonProperty.ValueKind != JsonValueKind.Undefined &&
+                reasonProperty.ValueKind != JsonValueKind.Null)
+            {
+                reason = reasonProperty.ToString();
+            }
+
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                reason = "用户拒绝执行";
+            }
+
+            // 使用简化的工具审批方法（不验证审批人）
+            var success = await _approvalService.PerformToolApprovalActionAsync(
+                approvalId,
+                "reject",
+                reason);
+
+            if (!success)
+            {
+                var existing = await _approvalService.GetApprovalAsync(approvalId);
+                if (existing == null)
+                {
+                    return NotFound(new { error = "Approval not found" });
+                }
+                return Ok(new
+                {
+                    success = true,
+                    message = "审批已处理",
+                    decision = existing.Decision
+                });
+            }
+
+            _logger.LogInformation("Tool call rejected for approval {ApprovalId}", approvalId);
+
+            return Ok(new { success = true, message = "工具调用已拒绝" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to reject tool call");
+            return StatusCode(500, new { error = "Failed to reject", message = ex.Message });
+        }
     }
 }

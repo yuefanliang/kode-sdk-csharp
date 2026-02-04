@@ -65,10 +65,14 @@ export interface Approval {
   toolName: string
   arguments: unknown
   description: string
-  status: 'pending' | 'approved' | 'cancelled'
+  status: 'pending' | 'approved' | 'cancelled' | 'denied'
   createdAt: string
   decidedAt?: string
   note?: string
+  decidedBy?: string
+  isSensitive: boolean
+  operationType?: number
+  callId?: string
 }
 
 export interface ApprovalDecisionRequest {
@@ -85,6 +89,8 @@ export interface MessagePart {
   output?: string // for tool result
   errorMessage?: string // for tool error
   isExpanded?: boolean // for tool UI state
+  approvalId?: string // for approval ID
+  needsApproval?: boolean // whether this tool needs approval
 }
 
 export interface Message {

@@ -72,7 +72,10 @@ public static class AssistantTemplate
             [
                 "email_send",        // 发送邮件需审批
                 "email_delete",      // 删除邮件需审批
-                "fs_rm" // 删除文件需审批
+                "fs_rm",            // 删除文件需审批
+                "fs_delete",        // 删除文件需审批
+                "fs_remove",        // 删除文件需审批
+                // "bash_run"        // 执行命令不再需要审批
             ],
             AllowTools =
             [
@@ -88,8 +91,8 @@ public static class AssistantTemplate
                 "skill_list", "skill_activate", "skill_resource",
                 // Todo
                 "todo_read", "todo_write",
-                // Bash (受限)
-                "bash_run", "bash_logs"
+                // Bash (受限 - 仅日志)
+                "bash_logs"
             ],
             DenyTools =
             [

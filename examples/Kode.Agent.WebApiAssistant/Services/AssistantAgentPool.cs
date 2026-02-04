@@ -3,7 +3,9 @@ using AgentImpl = Kode.Agent.Sdk.Core.Agent.Agent;
 using Kode.Agent.Sdk.Core.Types;
 using Kode.Agent.WebApiAssistant;
 using Kode.Agent.WebApiAssistant.Assistant;
+using Kode.Agent.WebApiAssistant.Services;
 using Kode.Agent.Sdk.Core.Abstractions;
+using Kode.Agent.Sdk.Core.Skills;
 
 namespace Kode.Agent.WebApiAssistant.Services;
 
@@ -72,15 +74,6 @@ public sealed class AssistantAgentPool
         _serviceProvider = serviceProvider;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<AssistantAgentPool>();
-
-        // _logger.LogInformation(
-        //     "AssistantAgentPool initialized. Enabled={Enabled} UseDocker={UseDocker} PerAgentDataDir={PerAgentDataDir} MaxAgents={MaxAgents} IdleTimeout={IdleTimeout} SweepInterval={SweepInterval}",
-        //     _options.UseAgentPool,
-        //     _options.UseDockerSandbox,
-        //     _options.UsePerAgentDataDir,
-        //     _options.AgentPoolMaxAgents,
-        //     _options.AgentPoolIdleTimeout,
-        //     _options.AgentPoolSweepInterval);
     }
 
     public int Count => _agents.Count;
@@ -308,9 +301,116 @@ public sealed class AssistantAgentPool
         GetOwnedAgentOptions opts,
         CancellationToken cancellationToken)
     {
-        var userDataDir = _options.UsePerAgentDataDir
-            ? Path.Combine(_options.WorkDir, "data", agentId)
-            : null;
+        // 尝试从SessionWorkspaceService获取会话配置的工作区
+        string? userDataDir = null;
+        // 存储会话激活的技能路径
+        List<string> sessionSkillPaths = new();
+
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var sessionWorkspaceService = scope.ServiceProvider.GetService<ISessionWorkspaceService>();
+            if (sessionWorkspaceService != null)
+            {
+                try
+                {
+                    // 使用默认用户ID获取工作区配置（实际应用中应从认证信息获取）
+                    const string defaultUserId = "default-user-001";
+                    var sessionWorkspace = await sessionWorkspaceService.GetSessionWorkspaceAsync(agentId, defaultUserId);
+                    if (sessionWorkspace != null && !string.IsNullOrWhiteSpace(sessionWorkspace.WorkDirectory))
+                    {
+                        userDataDir = sessionWorkspace.WorkDirectory;
+                        _logger.LogInformation(
+                            "Using configured workspace for session {SessionId}: {WorkDir}",
+                            agentId, userDataDir);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to get session workspace for {SessionId}, using default", agentId);
+                }
+            }
+
+            // 加载会话特定的激活技能
+            var sessionSkillService = scope.ServiceProvider.GetService<SessionSkillService>();
+            if (sessionSkillService != null)
+            {
+                try
+                {
+                    sessionSkillPaths = await sessionSkillService.GetActiveSkillPathsAsync(agentId);
+                    if (sessionSkillPaths.Count > 0)
+                    {
+                        _logger.LogInformation(
+                            "Loaded {Count} active skills for session {SessionId}",
+                            sessionSkillPaths.Count, agentId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load session skills for {SessionId}", agentId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve scoped services, continuing without them");
+        }
+
+        // 如果没有配置的工作区，使用默认路径
+        if (string.IsNullOrEmpty(userDataDir) && _options.UsePerAgentDataDir)
+        {
+            userDataDir = Path.Combine(_options.WorkDir, "data", agentId);
+        }
+
+        // 合并技能路径：全局配置 + 会话特定技能
+        var mergedSkillPaths = new List<string>();
+        if (_options.SkillsConfig?.Paths != null)
+        {
+            mergedSkillPaths.AddRange(_options.SkillsConfig.Paths);
+        }
+        // 添加会话激活的技能路径
+        foreach (var skillPath in sessionSkillPaths)
+        {
+            if (!string.IsNullOrEmpty(skillPath) && Directory.Exists(skillPath))
+            {
+                // 检查技能目录是否包含SKILL.md（有效技能）
+                var skillMdPath = Path.Combine(skillPath, "SKILL.md");
+                if (File.Exists(skillMdPath))
+                {
+                    mergedSkillPaths.Add(skillPath);
+                    _logger.LogDebug("Added session skill path: {Path}", skillPath);
+                }
+                else
+                {
+                    // 可能是ZIP解压后的子目录结构，尝试查找包含SKILL.md的子目录
+                    try
+                    {
+                        var subDirs = Directory.GetDirectories(skillPath);
+                        foreach (var subDir in subDirs)
+                        {
+                            var subSkillMd = Path.Combine(subDir, "SKILL.md");
+                            if (File.Exists(subSkillMd))
+                            {
+                                mergedSkillPaths.Add(subDir);
+                                _logger.LogDebug("Added nested session skill path: {Path}", subDir);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to scan skill directory: {Path}", skillPath);
+                    }
+                }
+            }
+        }
+
+        // 去重
+        mergedSkillPaths = mergedSkillPaths.Distinct().ToList();
+
+        var skillsConfig = new SkillsConfig
+        {
+            Paths = mergedSkillPaths
+        };
 
         var createOptions = new CreateAssistantOptions
         {
@@ -322,7 +422,7 @@ public sealed class AssistantAgentPool
             SystemPrompt = opts.SystemPrompt ?? _options.DefaultSystemPrompt,
             Temperature = opts.Temperature,
             MaxTokens = opts.MaxTokens,
-            Skills = _options.SkillsConfig,
+            Skills = skillsConfig,
             Permissions = _options.PermissionConfig,
             UseDockerSandbox = _options.UseDockerSandbox,
             DockerImage = _options.DockerImage,

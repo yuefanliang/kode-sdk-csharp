@@ -108,4 +108,52 @@ public interface IPersistenceService
     Task<WorkspaceEntity?> GetActiveWorkspaceAsync(string userId, CancellationToken cancellationToken = default);
 
     #endregion
+
+    #region SessionWorkspace 操作
+
+    /// <summary>
+    /// 获取会话工作区
+    /// </summary>
+    Task<SessionWorkspaceEntity?> GetSessionWorkspaceAsync(string sessionId, string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 创建或更新会话工作区
+    /// </summary>
+    Task<SessionWorkspaceEntity> UpsertSessionWorkspaceAsync(SessionWorkspaceEntity workspace, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 删除会话工作区
+    /// </summary>
+    Task DeleteSessionWorkspaceAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取用户的所有会话工作区
+    /// </summary>
+    Task<IReadOnlyList<SessionWorkspaceEntity>> ListSessionWorkspacesAsync(string userId, CancellationToken cancellationToken = default);
+
+    #endregion
+
+    #region Message 操作
+
+    /// <summary>
+    /// 获取消息
+    /// </summary>
+    Task<MessageEntity?> GetMessageAsync(string messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 创建消息
+    /// </summary>
+    Task<MessageEntity> CreateMessageAsync(MessageEntity message, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 获取会话的所有消息
+    /// </summary>
+    Task<IReadOnlyList<MessageEntity>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 删除会话的所有消息
+    /// </summary>
+    Task DeleteMessagesAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    #endregion
 }

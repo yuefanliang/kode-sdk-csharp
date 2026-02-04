@@ -1,7 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Anthropic;
+using Anthropic.Exceptions;
 using Anthropic.Models.Messages;
+using Kode.Agent.Sdk.Core;
 using Microsoft.Extensions.Logging;
 using ContentBlock = Kode.Agent.Sdk.Core.Types.ContentBlock;
 using Message = Kode.Agent.Sdk.Core.Types.Message;
@@ -52,8 +54,51 @@ public sealed class AnthropicProvider : IModelProvider
         var toolNameMap = new Dictionary<long, string>();
         var toolInputBuilders = new Dictionary<long, System.Text.StringBuilder>();
 
-        await foreach (var evt in _client.Messages.CreateStreaming(parameters, cancellationToken))
+        var stream = _client.Messages.CreateStreaming(parameters, cancellationToken);
+        await using var enumerator = stream.GetAsyncEnumerator(cancellationToken);
+
+        while (true)
         {
+            bool hasNext;
+            try
+            {
+                hasNext = await enumerator.MoveNextAsync();
+            }
+            catch (Exception ex) when (IsCancellation(ex))
+            {
+                yield break;
+            }
+            catch (AnthropicForbiddenException ex)
+            {
+                throw new ModelException(
+                    $"Anthropic request forbidden (HTTP 403): {ex.Message}",
+                    model: request.Model,
+                    statusCode: 403,
+                    innerException: ex);
+            }
+            catch (AnthropicBadRequestException ex)
+            {
+                throw new ModelException(
+                    $"Anthropic request bad request (HTTP 400): {ex.Message}",
+                    model: request.Model,
+                    statusCode: 400,
+                    innerException: ex);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new ModelException(
+                    $"Anthropic request failed (HTTP): {ex.Message}",
+                    model: request.Model,
+                    statusCode: 502,
+                    innerException: ex);
+            }
+
+            if (!hasNext)
+            {
+                break;
+            }
+
+            var evt = enumerator.Current;
             // Handle content block start
             if (evt.TryPickContentBlockStart(out var startEvent))
             {
@@ -95,7 +140,9 @@ public sealed class AnthropicProvider : IModelProvider
                         builder.Append(jsonDelta.PartialJSON);
                     }
 
-                    var toolId = toolIdMap.GetValueOrDefault(deltaEvent.Index, deltaEvent.Index.ToString());
+                    var toolId = toolIdMap.GetValueOrDefault(
+                        deltaEvent.Index,
+                        $"{toolNameMap.GetValueOrDefault(deltaEvent.Index, "")}:{deltaEvent.Index}");
                     var toolName = toolNameMap.GetValueOrDefault(deltaEvent.Index, "");
 
                     yield return new StreamChunk
@@ -134,7 +181,9 @@ public sealed class AnthropicProvider : IModelProvider
                         }
                     }
 
-                    var toolId = toolIdMap.GetValueOrDefault(stopEvent.Index, stopEvent.Index.ToString());
+                    var toolId = toolIdMap.GetValueOrDefault(
+                        stopEvent.Index,
+                        $"{toolNameMap.GetValueOrDefault(stopEvent.Index, "")}:{stopEvent.Index}");
                     toolIdMap.Remove(stopEvent.Index);
                     toolNameMap.Remove(stopEvent.Index);
 
@@ -180,11 +229,38 @@ public sealed class AnthropicProvider : IModelProvider
         }
     }
 
+    private static bool IsCancellation(Exception ex)
+    {
+        if (ex is OperationCanceledException) return true;
+        if (ex is AggregateException agg && agg.InnerExceptions.Any(IsCancellation)) return true;
+        if (ex.InnerException != null) return IsCancellation(ex.InnerException);
+        return false;
+    }
+
     public async Task<ModelResponse> CompleteAsync(ModelRequest request, CancellationToken cancellationToken = default)
     {
         var parameters = BuildMessageParameters(request);
-        var response = await _client.Messages.Create(parameters, cancellationToken);
-        return ConvertToModelResponse(response);
+        try
+        {
+            var response = await _client.Messages.Create(parameters, cancellationToken);
+            return ConvertToModelResponse(response);
+        }
+        catch (AnthropicBadRequestException ex)
+        {
+            throw new ModelException(
+                $"Anthropic request bad request (HTTP 400): {ex.Message}",
+                model: request.Model,
+                statusCode: 400,
+                innerException: ex);
+        }
+        catch (AnthropicForbiddenException ex)
+        {
+            throw new ModelException(
+                $"Anthropic request forbidden (HTTP 403): {ex.Message}",
+                model: request.Model,
+                statusCode: 403,
+                innerException: ex);
+        }
     }
 
     public async Task<bool> ValidateAsync(CancellationToken cancellationToken = default)
@@ -210,7 +286,10 @@ public sealed class AnthropicProvider : IModelProvider
 
     private MessageCreateParams BuildMessageParameters(ModelRequest request)
     {
-        var messages = request.Messages
+        // 处理消息顺序：确保工具结果紧跟在对应的工具调用之后
+        var processedMessages = ProcessMessagesForToolCallOrder(request.Messages);
+
+        var messages = processedMessages
             .Where(m => m.Role != MessageRole.System)
             .Select(ConvertMessage)
             .ToList();
@@ -226,11 +305,18 @@ public sealed class AnthropicProvider : IModelProvider
             ? request.StopSequences.ToList()
             : null;
 
+        var model = !string.IsNullOrWhiteSpace(request.Model)
+            ? request.Model
+            : _options.ModelId ?? "claude-sonnet-4-20250514";
+
+        var maxTokens = request.MaxTokens ?? 4096;
+        if (maxTokens <= 0) maxTokens = 1;
+
         return new MessageCreateParams
         {
-            Model = request.Model,
+            Model = model,
             Messages = messages,
-            MaxTokens = request.MaxTokens ?? 4096,
+            MaxTokens = maxTokens,
             Temperature = request.Temperature,
             System = !string.IsNullOrEmpty(request.SystemPrompt) ? request.SystemPrompt : null!,
             Tools = tools,
@@ -238,9 +324,123 @@ public sealed class AnthropicProvider : IModelProvider
         };
     }
 
+    /// <summary>
+    /// 处理消息顺序，确保工具结果紧跟在对应的工具调用之后。
+    /// Kimi 模型要求：assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'
+    /// </summary>
+    private static List<Message> ProcessMessagesForToolCallOrder(IReadOnlyList<Message> messages)
+    {
+        var result = new List<Message>();
+
+        // 收集所有工具调用ID（来自助手消息）
+        var allToolUseIds = new HashSet<string>();
+        foreach (var msg in messages.Where(m => m.Role == MessageRole.Assistant))
+        {
+            foreach (var toolUse in msg.Content.OfType<ToolUseContent>())
+            {
+                allToolUseIds.Add(toolUse.Id);
+            }
+        }
+
+        // 收集所有工具结果并按ID分组
+        var toolResultsById = new Dictionary<string, ToolResultContent>();
+        var userMessagesWithoutToolResults = new List<Message>();
+
+        foreach (var msg in messages.Where(m => m.Role == MessageRole.User))
+        {
+            var toolResults = msg.Content.OfType<ToolResultContent>().ToList();
+            var nonToolContent = msg.Content.Where(c => c is not ToolResultContent).ToList();
+
+            // 存储工具结果
+            foreach (var tr in toolResults)
+            {
+                toolResultsById[tr.ToolUseId] = tr;
+            }
+
+            // 保存非工具结果内容，稍后添加
+            if (nonToolContent.Count > 0)
+            {
+                userMessagesWithoutToolResults.Add(new Message
+                {
+                    Role = MessageRole.User,
+                    Content = nonToolContent
+                });
+            }
+        }
+
+        // 按顺序处理消息，确保工具结果紧跟在对应工具调用之后
+        var processedToolResultIds = new HashSet<string>();
+
+        foreach (var msg in messages)
+        {
+            if (msg.Role == MessageRole.System)
+            {
+                result.Add(msg);
+                continue;
+            }
+
+            if (msg.Role == MessageRole.User)
+            {
+                // 跳过包含工具结果的用户消息，它们会被单独处理
+                var hasToolResults = msg.Content.OfType<ToolResultContent>().Any();
+                if (hasToolResults)
+                {
+                    continue;
+                }
+                // 添加不包含工具结果的用户消息
+                result.Add(msg);
+                continue;
+            }
+
+            // 添加助手消息
+            result.Add(msg);
+
+            // 如果是助手消息且包含工具调用，立即在其后插入对应的工具结果
+            if (msg.Role == MessageRole.Assistant)
+            {
+                var toolUses = msg.Content.OfType<ToolUseContent>().ToList();
+                foreach (var toolUse in toolUses)
+                {
+                    if (toolResultsById.TryGetValue(toolUse.Id, out var toolResult) &&
+                        !processedToolResultIds.Contains(toolUse.Id))
+                    {
+                        // 添加工具结果消息
+                        result.Add(new Message
+                        {
+                            Role = MessageRole.User,
+                            Content = new List<ContentBlock> { toolResult }
+                        });
+                        processedToolResultIds.Add(toolUse.Id);
+                    }
+                }
+            }
+        }
+
+        // 添加剩余的未匹配工具结果（孤儿工具结果）
+        var orphanResults = toolResultsById
+            .Where(kv => !processedToolResultIds.Contains(kv.Key))
+            .Select(kv => kv.Value)
+            .Cast<ContentBlock>()
+            .ToList();
+
+        if (orphanResults.Count > 0)
+        {
+            result.Add(new Message
+            {
+                Role = MessageRole.User,
+                Content = orphanResults
+            });
+        }
+
+        return result;
+    }
+
     private static MessageParam ConvertMessage(Message msg)
     {
-        var role = msg.Role == MessageRole.User ? Role.User : Role.Assistant;
+        var hasToolResults = msg.Content.OfType<ToolResultContent>().Any();
+        var role = hasToolResults
+            ? Role.User
+            : (msg.Role == MessageRole.User ? Role.User : Role.Assistant);
         var content = msg.Content.Select(ConvertContentBlock).ToList();
 
         return new MessageParam

@@ -39,4 +39,17 @@ public interface IApprovalService
         string approvalId,
         string userId,
         string? note = null);
+
+    /// <summary>
+    /// 注册审批回调函数
+    /// </summary>
+    void RegisterApprovalCallback(string callId, Func<string, object?, Task> callback);
+
+    /// <summary>
+    /// 执行工具审批操作（简化版本，不需要验证审批人）
+    /// </summary>
+    Task<bool> PerformToolApprovalActionAsync(
+        string approvalId,
+        string action,
+        string? comment = null);
 }

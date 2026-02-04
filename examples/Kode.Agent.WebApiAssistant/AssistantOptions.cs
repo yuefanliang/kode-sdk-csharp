@@ -169,7 +169,7 @@ public sealed record AssistantOptions
 
         // 解析需要审批的工具
         var requireApprovalToolsRaw = GetFirst(configuration, "Kode:RequireApprovalTools", "KODE_REQUIRE_APPROVAL_TOOLS",
-            "email_send,email_delete,fs_rm");
+            "email_send,email_delete,fs_rm,fs_delete,fs_remove");
         var requireApprovalTools = ParseList(requireApprovalToolsRaw);
 
         // 解析禁止的工具

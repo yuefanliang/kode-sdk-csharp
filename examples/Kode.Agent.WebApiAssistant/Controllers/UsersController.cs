@@ -55,6 +55,34 @@ public class UsersController : ControllerBase
     //}
 
     /// <summary>
+    /// 创建指定 userId 的用户
+    /// </summary>
+    [HttpPost("create")]
+    public async Task<ActionResult<UserResponse>> CreateUser(
+        [FromQuery] string userId,
+        [FromBody] UserCreateRequest? request)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return BadRequest(new { error = "userId is required" });
+        }
+
+        try
+        {
+            var user = await _userService.GetOrCreateUserAsync(userId);
+            return CreatedAtAction(
+                nameof(GetProfile),
+                new { userId = user.UserId },
+                UserResponse.FromEntity(user));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create user: {UserId}", userId);
+            return StatusCode(500, new { error = "Failed to create user" });
+        }
+    }
+
+    /// <summary>
     /// 获取用户信息
     /// </summary>
     /// <param name="userId">用户 ID</param>

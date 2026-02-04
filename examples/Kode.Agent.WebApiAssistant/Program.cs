@@ -79,6 +79,7 @@ try
     builder.Services.AddSingleton<AssistantAgentPool>();
     builder.Services.AddHostedService<AssistantAgentPoolEvictionService>();
     builder.Services.AddSingleton<AssistantService>();
+    builder.Services.AddScoped<StreamProcessorService>();
 
     // 添加 MCP 服务
     builder.Services.AddMcpClientManager();
@@ -94,8 +95,18 @@ try
     // 添加核心服务（包括 UserService 和 SessionService）
     builder.Services.AddCoreServices();
 
-    // 添加 HttpClient 支持（用于 Notify 工具）
+    // 添加会话工作区服务
+    builder.Services.AddScoped<ISessionWorkspaceService, SessionWorkspaceService>();
+
+    // 添加系统配置服务
+    builder.Services.AddScoped<SystemConfigService>();
+
+    // 添加会话Skill服务
+    builder.Services.AddScoped<SessionSkillService>();
+
+    // 添加 HttpClient 支持（用于 Notify 工具和 Skill 下载）
     builder.Services.AddHttpClient("Notify", client => { client.Timeout = TimeSpan.FromSeconds(30); });
+    builder.Services.AddHttpClient("SkillDownload", client => { client.Timeout = TimeSpan.FromMinutes(5); });
 
     // 添加平台特定工具服务（email, notify, time）
     builder.Services.AddPlatformTools(builder.Configuration);
@@ -108,6 +119,11 @@ try
         var persistenceService = scope.ServiceProvider.GetRequiredService<IPersistenceService>();
         await persistenceService.InitializeAsync();
         Log.Information("Database initialized successfully");
+
+        // 初始化系统配置
+        var configService = scope.ServiceProvider.GetRequiredService<SystemConfigService>();
+        await configService.InitializeDefaultConfigsAsync();
+        Log.Information("System configs initialized successfully");
     }
 
     // 启用 Swagger

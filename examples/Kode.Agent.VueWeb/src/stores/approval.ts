@@ -11,14 +11,17 @@ export const useApprovalStore = defineStore('approval', () => {
   const hasPendingApprovals = computed(() => pendingApprovals.value.length > 0)
 
   // 加载待审批列表
-  async function loadPendingApprovals(userId?: string) {
+  async function loadPendingApprovals(userId?: string, sessionId?: string) {
     const uid = userId || 'default-user-001'
 
     try {
       loading.value = true
       error.value = null
       const response = await approvalApi.getPending(uid)
-      pendingApprovals.value = response.data || []
+      const approvals = response.data || []
+      pendingApprovals.value = sessionId
+        ? approvals.filter(approval => approval.sessionId === sessionId || approval.agentId === sessionId)
+        : approvals
     } catch (err: any) {
       error.value = err.message || '加载待审批列表失败'
       console.error('Failed to load pending approvals:', err)
@@ -27,12 +30,12 @@ export const useApprovalStore = defineStore('approval', () => {
     }
   }
 
-  // 确认审批
-  async function confirmApproval(approvalId: string, userId: string, note?: string) {
+  // 批准审批
+  async function confirmApproval(approvalId: string, note?: string) {
     try {
       loading.value = true
       error.value = null
-      await approvalApi.confirm(approvalId, userId, { note })
+      await approvalApi.approve(approvalId, { note })
 
       // 从列表中移除该审批
       pendingApprovals.value = pendingApprovals.value.filter(
@@ -47,12 +50,12 @@ export const useApprovalStore = defineStore('approval', () => {
     }
   }
 
-  // 取消审批
-  async function cancelApproval(approvalId: string, userId: string, note?: string) {
+  // 拒绝审批
+  async function cancelApproval(approvalId: string, note?: string) {
     try {
       loading.value = true
       error.value = null
-      await approvalApi.cancel(approvalId, userId, { note })
+      await approvalApi.reject(approvalId, { reason: note })
 
       // 从列表中移除该审批
       pendingApprovals.value = pendingApprovals.value.filter(

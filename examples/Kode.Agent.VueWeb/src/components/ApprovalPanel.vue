@@ -1,223 +1,149 @@
 <template>
   <div class="approval-panel">
-    <div class="approval-header">
-      <span>待审批事项</span>
-      <el-badge :value="pendingCount" :hidden="pendingCount === 0" type="danger" />
-    </div>
-
-    <div v-if="loading" class="loading-container">
-      <el-icon class="is-loading"><Loading /></el-icon>
-    </div>
-
-    <div v-else class="approval-items">
-      <div
-        v-for="approval in pendingApprovals"
-        :key="approval.approvalId"
-        class="approval-item"
-      >
-        <div class="approval-info">
-          <div class="approval-tool">
-            <el-tag size="small">{{ approval.toolName }}</el-tag>
-          </div>
-          <div class="approval-meta">
-            <span class="meta-label">会话</span>
-            <span class="meta-value">{{ approval.sessionId || approval.agentId || '-' }}</span>
-          </div>
-          <div class="approval-meta">
-            <span class="meta-label">用户</span>
-            <span class="meta-value">{{ approval.userId }}</span>
-          </div>
-          <div class="approval-description">{{ approval.description }}</div>
-          <div class="approval-arguments" v-if="approval.arguments">
-            <el-collapse>
-              <el-collapse-item title="查看参数" name="args">
-                <pre class="args-content">{{ formatArguments(approval.arguments) }}</pre>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-          <div class="approval-context" v-if="hasContext(approval)">
-            <el-collapse>
-              <el-collapse-item title="查看上下文" name="context">
-                <pre class="context-content">{{ formatContext(approval) }}</pre>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-          <div class="approval-time">{{ formatTime(approval.createdAt) }}</div>
-        </div>
-
-        <div class="approval-actions">
-          <el-button
-            type="success"
-            size="small"
-            @click="handleConfirm(approval)"
-            :loading="loadingAction === approval.approvalId"
-            :disabled="loadingAction !== null"
-          >
-            <el-icon><Select /></el-icon>
-            同意
-          </el-button>
-          <el-button
-            type="danger"
-            size="small"
-            @click="handleCancel(approval)"
-            :loading="loadingAction === approval.approvalId"
-            :disabled="loadingAction !== null"
-          >
-            <el-icon><Close /></el-icon>
-            拒绝
-          </el-button>
-          <el-tag v-if="loadingAction === approval.approvalId" size="small" type="warning">
-            处理中
-          </el-tag>
-        </div>
+    <div class="panel-header">
+      <div class="panel-title">
+        <el-icon><FolderOpened /></el-icon>
+        <span>工作区</span>
       </div>
-
-      <el-empty
-        v-if="pendingApprovals.length === 0"
-        description="暂无待审批事项"
-        :image-size="60"
-      />
     </div>
+
+    <div class="panel-content">
+      <!-- Skill 管理 -->
+      <SessionSkillManager
+        v-if="sessionId"
+        :session-id="sessionId"
+        class="skill-manager-section"
+      />
+
+      <!-- 工作区浏览器 -->
+      <div class="workspace-section">
+        <div class="section-title">工作区文件</div>
+        <div v-if="workspaceLoading" class="loading-container">
+          <el-icon class="is-loading"><Loading /></el-icon>
+          <span>加载工作区中...</span>
+        </div>
+
+        <div v-else-if="!currentWorkspacePath" class="workspace-empty">
+          <el-icon><Warning /></el-icon>
+          <span>当前会话未配置工作区</span>
+        </div>
+
+        <WorkspaceBrowser
+          v-else
+          :workspace-path="currentWorkspacePath"
+          @file-select="handleFileSelect"
+        />
+      </div>
+    </div>
+
+    <!-- 文件预览对话框 -->
+    <el-dialog
+      v-model="previewVisible"
+      :title="previewFileName"
+      width="80%"
+      :fullscreen="isFullscreen"
+      class="preview-dialog"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="preview-dialog-header">
+          <span>{{ previewFileName }}</span>
+          <el-button
+            text
+            :icon="isFullscreen ? Crop : FullScreen"
+            @click="isFullscreen = !isFullscreen"
+          >
+            {{ isFullscreen ? '退出全屏' : '全屏' }}
+          </el-button>
+        </div>
+      </template>
+      <OfficeViewer
+        v-if="previewVisible && previewFileUrl"
+        :file-url="previewFileUrl"
+        :file-name="previewFileName"
+      />
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Select, Close } from '@element-plus/icons-vue'
-import { useApprovalStore } from '@/stores/approval'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { Loading, Warning, FolderOpened, FullScreen, Crop } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import type { Approval } from '@/types'
+import WorkspaceBrowser from './WorkspaceBrowser.vue'
+import SessionSkillManager from './SessionSkillManager.vue'
+import OfficeViewer from './OfficeViewer.vue'
 
-const approvalStore = useApprovalStore()
+const route = useRoute()
 const userStore = useUserStore()
 
-const loading = ref(false)
-const loadingAction = ref<string | null>(null)
+const sessionId = computed(() => route.params.sessionId as string)
 
-const pendingApprovals = computed(() => approvalStore.pendingApprovals)
-const pendingCount = computed(() => pendingApprovals.value.length)
+// 获取当前会话的工作区路径
+const currentWorkspacePath = ref('')
+const workspaceLoading = ref(false)
 
-async function loadApprovals() {
-  loading.value = true
-  try {
-    await approvalStore.loadPendingApprovals(userStore.DEFAULT_USER_ID)
-  } catch (error) {
-    console.error('加载待审批列表失败:', error)
-  } finally {
-    loading.value = false
+// 文件预览状态
+const previewVisible = ref(false)
+const previewFileUrl = ref('')
+const previewFileName = ref('')
+const isFullscreen = ref(false)
+
+async function loadSessionWorkspace() {
+  const sessionId = route.params.sessionId as string
+  if (!sessionId) {
+    currentWorkspacePath.value = ''
+    return
   }
-}
 
-async function handleConfirm(approval: Approval) {
+  workspaceLoading.value = true
   try {
-    const value = await ElMessageBox.prompt('请输入备注（可选）', '同意审批', {
-      confirmButtonText: '同意',
-      cancelButtonText: '取消',
-      inputPattern: /.*/,
-      inputErrorMessage: '备注不能为空'
-    })
+    console.log('Loading workspace for session:', sessionId)
+    const resp = await fetch(`/api/sessionworkspaces/sessions/${sessionId}?userId=${userStore.DEFAULT_USER_ID}`)
 
-    loadingAction.value = approval.approvalId
-    await approvalStore.confirmApproval(
-      approval.approvalId,
-      userStore.DEFAULT_USER_ID,
-      value.value || undefined
-    )
-
-    ElMessage.success('已同意审批')
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '同意失败')
+    if (resp.ok) {
+      const data = await resp.json()
+      const workDir = data.workDirectory || ''
+      currentWorkspacePath.value = workDir
+      console.log('Workspace loaded:', workDir)
+    } else {
+      const errorText = await resp.text()
+      console.error('Failed to load workspace:', errorText)
+      currentWorkspacePath.value = ''
     }
+  } catch (err) {
+    console.error('Error loading workspace:', err)
+    currentWorkspacePath.value = ''
   } finally {
-    loadingAction.value = null
+    workspaceLoading.value = false
   }
-}
-
-async function handleCancel(approval: Approval) {
-  try {
-    const value = await ElMessageBox.prompt('请输入备注（可选）', '拒绝审批', {
-      confirmButtonText: '拒绝',
-      cancelButtonText: '返回',
-      inputPattern: /.*/,
-      inputErrorMessage: '备注不能为空'
-    })
-
-    loadingAction.value = approval.approvalId
-    await approvalStore.cancelApproval(
-      approval.approvalId,
-      userStore.DEFAULT_USER_ID,
-      value.value || undefined
-    )
-
-    ElMessage.success('已拒绝审批')
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '拒绝失败')
-    }
-  } finally {
-    loadingAction.value = null
-  }
-}
-
-function formatTime(time: string) {
-  const date = parseUtc8Date(time)
-  if (!date) return ''
-  const display = date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Shanghai'
-  })
-  return `${display} UTC+8`
-}
-
-function parseUtc8Date(time: string) {
-  const trimmed = time.trim()
-  const hasZone = /z$/i.test(trimmed) || /[+-]\d{2}:?\d{2}$/.test(trimmed)
-  const normalized = hasZone
-    ? trimmed
-    : trimmed.includes(' ') && !trimmed.includes('T')
-      ? `${trimmed.replace(' ', 'T')}Z`
-      : `${trimmed}Z`
-  const date = new Date(normalized)
-  if (Number.isNaN(date.getTime())) return null
-  return date
-}
-
-function formatArguments(args: Approval['arguments']) {
-  if (typeof args === 'string') return args
-  try {
-    return JSON.stringify(args, null, 2)
-  } catch {
-    return String(args)
-  }
-}
-
-function hasContext(approval: Approval) {
-  return !!(approval.arguments || approval.description || approval.sessionId || approval.agentId)
-}
-
-function formatContext(approval: Approval) {
-  const payload = {
-    toolName: approval.toolName,
-    description: approval.description,
-    sessionId: approval.sessionId,
-    agentId: approval.agentId,
-    userId: approval.userId,
-    arguments: approval.arguments,
-    createdAt: approval.createdAt
-  }
-  return JSON.stringify(payload, null, 2)
 }
 
 onMounted(() => {
-  loadApprovals()
-  // 每隔30秒刷新一次
-  setInterval(loadApprovals, 30000)
+  loadSessionWorkspace()
 })
+
+// 当会话切换时刷新工作区
+watch(() => route.params.sessionId, () => {
+  loadSessionWorkspace()
+})
+
+// 处理文件选择（预览）
+async function handleFileSelect(filePath: string) {
+  if (!filePath) return
+
+  // 构建文件预览URL
+  const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || '未知文件'
+  previewFileName.value = fileName
+
+  // 使用API路径获取文件内容
+  const encodedPath = encodeURIComponent(filePath)
+  previewFileUrl.value = `/api/workspace/file?path=${encodedPath}&sessionId=${sessionId.value}`
+
+  previewVisible.value = true
+  console.log('Preview file:', filePath, 'URL:', previewFileUrl.value)
+}
 </script>
 
 <style scoped>
@@ -225,104 +151,108 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.approval-header {
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e4e7ed;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.panel-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: #303133;
-  border-bottom: 1px solid #e4e7ed;
+}
+
+.panel-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .loading-container {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 20px;
+  gap: 12px;
+  padding: 40px;
+  color: #909399;
 }
 
-.approval-items {
-  flex: 1;
+.workspace-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #909399;
+}
+
+.workspace-empty .el-icon {
+  font-size: 32px;
+}
+
+.preview-content {
+  background: #f5f7fa;
+  padding: 16px;
+  border-radius: 4px;
+  max-height: 500px;
   overflow-y: auto;
-  padding: 10px;
-}
-
-.approval-item {
-  padding: 12px;
-  margin-bottom: 12px;
-  background: #fff;
-  border-radius: 6px;
-  border: 1px solid #e4e7ed;
-}
-
-.approval-tool {
-  margin-bottom: 8px;
-}
-
-.approval-description {
-  font-size: 13px;
-  color: #303133;
-  margin-bottom: 8px;
+  font-family: monospace;
+  font-size: 12px;
   line-height: 1.5;
-}
-
-.approval-meta {
-  display: flex;
-  gap: 6px;
-  font-size: 12px;
-  color: #606266;
-  margin-bottom: 6px;
-  align-items: center;
-}
-
-.meta-label {
-  color: #909399;
-}
-
-.meta-value {
-  word-break: break-all;
-}
-
-.approval-arguments {
-  margin-bottom: 8px;
-}
-
-.args-content {
-  font-size: 12px;
-  background: #f5f7fa;
-  padding: 8px;
-  border-radius: 4px;
   white-space: pre-wrap;
   word-break: break-all;
   color: #606266;
 }
 
-.approval-context {
-  margin-bottom: 8px;
+.skill-manager-section {
+  border-bottom: 1px solid #e4e7ed;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
-.context-content {
-  font-size: 12px;
-  background: #f5f7fa;
-  padding: 8px;
-  border-radius: 4px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: #606266;
-}
-
-.approval-time {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 8px;
-}
-
-.approval-actions {
+.workspace-section {
+  flex: 1;
+  overflow: hidden;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+}
+
+.section-title {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+/* 预览对话框样式 */
+.preview-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  height: 60vh;
+  overflow: hidden;
+}
+
+.preview-dialog.is-fullscreen :deep(.el-dialog__body) {
+  height: calc(100vh - 55px);
+}
+
+.preview-dialog-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  width: 100%;
+  padding-right: 20px;
 }
 </style>

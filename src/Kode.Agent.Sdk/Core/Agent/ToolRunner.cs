@@ -12,6 +12,7 @@ public sealed class ToolRunner : IAsyncDisposable
     private readonly SemaphoreSlim _semaphore;
     private readonly Dictionary<string, ToolCallRecord> _activeToolCalls = [];
     private readonly object _lock = new();
+    private bool _disposed;
 
     public ToolRunner(IToolRegistry toolRegistry, int maxConcurrency = 3)
     {
@@ -279,6 +280,11 @@ public sealed class ToolRunner : IAsyncDisposable
         ToolContext context,
         CancellationToken cancellationToken = default)
     {
+        if (_disposed)
+        {
+            return ToolResult.Fail("ToolRunner has been disposed");
+        }
+
         var tool = _toolRegistry.Get(toolName)
             ?? throw new ToolNotFoundException(toolName);
 
@@ -339,7 +345,10 @@ public sealed class ToolRunner : IAsyncDisposable
             }
             finally
             {
-                _semaphore.Release();
+                if (!_disposed)
+                {
+                    try { _semaphore.Release(); } catch (ObjectDisposedException) { }
+                }
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -497,7 +506,8 @@ public sealed class ToolRunner : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        _semaphore.Dispose();
+        _disposed = true;
+        try { _semaphore.Dispose(); } catch { }
         return ValueTask.CompletedTask;
     }
 

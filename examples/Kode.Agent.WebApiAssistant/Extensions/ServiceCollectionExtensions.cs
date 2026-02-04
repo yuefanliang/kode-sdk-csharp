@@ -28,8 +28,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IWorkspaceService, WorkspaceService>();
-        services.AddScoped<IApprovalService, ApprovalService>();
+        services.AddSingleton<IApprovalService, ApprovalService>();
         services.AddScoped<IPdfExportService, PdfExportService>();
+        services.AddScoped<IMessageService, MessageService>();
+        services.AddScoped<SystemConfigService>();
+        services.AddSingleton<SystemSkillService>();
 
         // 添加 Swagger/OpenAPI 支持
         services.AddEndpointsApiExplorer();

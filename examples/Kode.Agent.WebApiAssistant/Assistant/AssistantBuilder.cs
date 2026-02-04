@@ -72,6 +72,47 @@ public static class AssistantBuilder
     }
 
     /// <summary>
+    /// 获取Template的默认权限配置
+    /// </summary>
+    private static PermissionConfig GetTemplatePermissionConfig()
+    {
+        return new PermissionConfig
+        {
+            Mode = "auto",
+            RequireApprovalTools =
+            [
+                "email_send",        // 发送邮件需审批
+                "email_delete",      // 删除邮件需审批
+                "fs_rm",            // 删除文件需审批
+                "fs_delete",        // 删除文件需审批
+                "fs_remove",        // 删除文件需审批
+                "bash_run"          // 执行命令需审批
+            ],
+            AllowTools =
+            [
+                // 文件系统（只读和编辑）
+                "fs_read", "fs_write", "fs_edit", "fs_grep", "fs_glob", "fs_multi_edit",
+                // 邮件（读和草稿）
+                "email_list", "email_read", "email_draft", "email_move",
+                // 通知
+                "notify_send",
+                // 时间
+                "time_now",
+                // Skills
+                "skill_list", "skill_activate", "skill_resource",
+                // Todo
+                "todo_read", "todo_write",
+                // Bash (受限 - 仅日志)
+                "bash_logs"
+            ],
+            DenyTools =
+            [
+                "bash_kill" // 禁止杀进程
+            ]
+        };
+    }
+
+    /// <summary>
     /// Create a Personal Assistant Agent.
     /// </summary>
     public static async Task<AgentImpl> CreateAssistantAsync(
@@ -168,6 +209,18 @@ public static class AssistantBuilder
         // Merge MCP tool names into allowTools
         var mergedAllowTools = MergeAllowTools(options.Permissions?.AllowTools, mcpToolNames);
 
+        // 获取Template的默认权限配置（直接使用内部方法）
+        var templatePermissionConfig = GetTemplatePermissionConfig();
+
+        // 合并权限配置：优先使用配置文件中的值，如果没有则使用Template默认值
+        var mergedRequireApprovalTools = options.Permissions?.RequireApprovalTools?.Count > 0
+            ? options.Permissions.RequireApprovalTools
+            : templatePermissionConfig?.RequireApprovalTools;
+
+        var mergedDenyTools = options.Permissions?.DenyTools?.Count > 0
+            ? options.Permissions.DenyTools
+            : templatePermissionConfig?.DenyTools;
+
         var config = new AgentConfig
         {
             Model = options.Model ?? "claude-sonnet-4-5-20250929",
@@ -177,10 +230,12 @@ public static class AssistantBuilder
             MaxTokens = options.MaxTokens,
             Temperature = options.Temperature,
             Tools = ["*"], // Allow all tools
-            Permissions = (options.Permissions ?? new PermissionConfig()) with
+            Permissions = new PermissionConfig
             {
-                Mode = options.Permissions?.Mode ?? "auto",
-                AllowTools = mergedAllowTools
+                Mode = options.Permissions?.Mode ?? templatePermissionConfig?.Mode ?? "auto",
+                AllowTools = mergedAllowTools,
+                RequireApprovalTools = mergedRequireApprovalTools,
+                DenyTools = mergedDenyTools
             },
             SandboxOptions = new SandboxOptions
             {

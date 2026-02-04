@@ -1,5 +1,5 @@
 import request from './request'
-import type { Approval, ApprovalDecisionRequest, ApiResponse } from '@/types'
+import type { Approval, ApiResponse } from '@/types'
 
 export const approvalApi = {
   // 获取待审批列表
@@ -16,19 +16,15 @@ export const approvalApi = {
     return { data: response.data }
   },
 
-  // 确认审批
-  async confirm(approvalId: string, userId: string, data?: ApprovalDecisionRequest): Promise<ApiResponse<void>> {
-    const response = await request.post(`/api/approvals/${approvalId}/confirm`, data || {}, {
-      params: { userId }
-    })
+  // 批准工具调用
+  async approve(approvalId: string, data?: { note?: string }): Promise<ApiResponse<any>> {
+    const response = await request.post(`/api/approvals/${approvalId}/approve`, data || {})
     return { data: response.data }
   },
 
-  // 取消审批
-  async cancel(approvalId: string, userId: string, data?: ApprovalDecisionRequest): Promise<ApiResponse<void>> {
-    const response = await request.post(`/api/approvals/${approvalId}/cancel`, data || {}, {
-      params: { userId }
-    })
+  // 拒绝工具调用
+  async reject(approvalId: string, data?: { reason?: string }): Promise<ApiResponse<any>> {
+    const response = await request.post(`/api/approvals/${approvalId}/reject`, data || {})
     return { data: response.data }
   }
 }

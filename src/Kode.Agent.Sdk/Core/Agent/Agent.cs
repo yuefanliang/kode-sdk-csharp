@@ -616,6 +616,19 @@ public sealed class Agent : IAgent, ISkillsAwareAgent, ITaskDelegatorAgent, ISub
                 Detail = new { stack = ex.StackTrace }
             });
 
+            try
+            {
+                _eventBus.EmitProgress(new DoneEvent
+                {
+                    Type = "done",
+                    Step = _stepCount,
+                    Reason = "error"
+                });
+            }
+            catch
+            {
+            }
+
             return new AgentRunResult
             {
                 Success = false,
@@ -2350,6 +2363,19 @@ public sealed class Agent : IAgent, ISkillsAwareAgent, ITaskDelegatorAgent, ISub
                         Message = ex.Message,
                         Detail = new { stack = ex.StackTrace }
                     });
+
+                    try
+                    {
+                        _eventBus.EmitProgress(new DoneEvent
+                        {
+                            Type = "done",
+                            Step = _stepCount,
+                            Reason = "error"
+                        });
+                    }
+                    catch
+                    {
+                    }
                 }
                 finally
                 {

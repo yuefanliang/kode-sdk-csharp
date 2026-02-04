@@ -7,6 +7,7 @@ public record ApprovalResponse
 {
     public required string ApprovalId { get; init; }
     public required string AgentId { get; init; }
+    public string? SessionId { get; init; }
     public required string ToolName { get; init; }
     public required object? Arguments { get; init; }
     public required string UserId { get; init; }
@@ -15,6 +16,9 @@ public record ApprovalResponse
     public required string Decision { get; init; }
     public string? DecidedBy { get; init; }
     public string? Note { get; init; }
+    public bool IsSensitive { get; init; }
+    public Models.Entities.ToolOperationType OperationType { get; init; }
+    public string? CallId { get; init; }
 
     public static ApprovalResponse FromEntity(Models.Entities.Approval entity)
     {
@@ -22,6 +26,7 @@ public record ApprovalResponse
         {
             ApprovalId = entity.ApprovalId,
             AgentId = entity.AgentId,
+            SessionId = entity.SessionId,
             ToolName = entity.ToolName,
             Arguments = entity.Arguments,
             UserId = entity.UserId,
@@ -29,7 +34,10 @@ public record ApprovalResponse
             DecidedAt = entity.DecidedAt,
             Decision = entity.Decision,
             DecidedBy = entity.DecidedBy,
-            Note = entity.Note
+            Note = entity.Note,
+            IsSensitive = entity.IsSensitive,
+            OperationType = entity.OperationType,
+            CallId = entity.CallId
         };
     }
 }
